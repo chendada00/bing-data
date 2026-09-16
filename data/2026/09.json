@@ -1,0 +1,32 @@
+{
+  "version": 1,
+  "year": 2026,
+  "month": 9,
+  "updatedAt": "2026-09-16T02:31:50.241Z",
+  "items": [
+    {
+      "date": "2026-09-16",
+      "title": "北极的新晋探索者",
+      "description": "斯瓦尔巴群岛玩耍的北极熊幼崽，挪威 (© Danny Green/Nature Picture Library)",
+      "copyright": "斯瓦尔巴群岛玩耍的北极熊幼崽，挪威 (© Danny Green/Nature Picture Library)",
+      "copyrightLink": "https://www.bing.com/search?q=%E5%8C%97%E6%9E%81%E7%86%8A&form=hpcapt&mkt=zh-cn",
+      "image": "https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-16.jpg",
+      "sourceImage": "https://cn.bing.com/th?id=OHR.IcyCubs_ZH-CN5287408951_UHD.jpg",
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APrzTfipNDdvbsbS4dCI1McgTJ2FiXznZ9049c+1dsnUhNrRrp3+Z4tOrCcVe6f4Gp8TLDUtZ0+2m0nxNZWCrIHuIGIUyxem77wzjsK6E11RnU5mrxlY8b8K/wDHvrv/AF7r/wC068if8ap8jpo/wofM+l/HH/Iral/1yP8A6FXqx3MZ/Cz/AP/Z",
+      "color": {
+        "Vibrant": "#8cbbcc",
+        "DarkVibrant": "#294e5c",
+        "LightVibrant": "#e3f4fb",
+        "Muted": "#7c9c9f",
+        "DarkMuted": "#4e5445",
+        "LightMuted": "#afc8d1"
+      },
+      "width": 3840,
+      "height": 2160,
+      "id": "3464e2609dc4cc5a425308f4e13b7ea0",
+      "startDate": "20260915",
+      "fullStartDate": "202609151600",
+      "endDate": "20260916"
+    }
+  ]
+}
