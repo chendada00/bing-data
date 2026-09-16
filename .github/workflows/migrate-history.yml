@@ -1,0 +1,278 @@
+name: Migrate History Asset URLs
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bing-wallpaper-migrate
+  cancel-in-progress: false
+
+jobs:
+  migrate:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Load environment
+        shell: bash
+        run: |
+          if [ ! -f .env ]; then
+            echo "::error::.env file not found"
+            exit 1
+          fi
+
+          set -a
+          source .env
+          set +a
+
+          if [ -z "$ASSET_BASE_URL" ]; then
+            echo "::error::ASSET_BASE_URL is not configured"
+            exit 1
+          fi
+
+          echo "ASSET_BASE_URL=$ASSET_BASE_URL" >> "$GITHUB_ENV"
+
+          echo "Asset base URL: $ASSET_BASE_URL"
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Migrate history
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('fs')
+          const path = require('path')
+
+          const ASSET_BASE_URL = (
+            process.env.ASSET_BASE_URL || ''
+          ).replace(/\/$/, '')
+
+          if (!ASSET_BASE_URL) {
+            throw new Error(
+              'ASSET_BASE_URL is not configured'
+            )
+          }
+
+          const DATA_ROOT = path.join(
+            process.cwd(),
+            'data'
+          )
+
+          function buildAssetUrl(filePath) {
+            return (
+              ASSET_BASE_URL +
+              '/' +
+              filePath
+                .replace(/\\/g, '/')
+                .replace(/^\/+/, '')
+            )
+          }
+
+          function collectJsonFiles(dir) {
+            if (!fs.existsSync(dir)) {
+              return []
+            }
+
+            const result = []
+
+            for (const entry of fs.readdirSync(dir, {
+              withFileTypes: true
+            })) {
+              const fullPath = path.join(
+                dir,
+                entry.name
+              )
+
+              if (entry.isDirectory()) {
+                result.push(
+                  ...collectJsonFiles(fullPath)
+                )
+                continue
+              }
+
+              if (
+                entry.isFile() &&
+                entry.name.endsWith('.json')
+              ) {
+                result.push(fullPath)
+              }
+            }
+
+            return result
+          }
+
+          function buildRelativeAssetPath(
+            type,
+            item
+          ) {
+            const date = item.date
+
+            if (!date) {
+              return null
+            }
+
+            const match =
+              /^(\d{4})-(\d{2})-(\d{2})$/.exec(
+                date
+              )
+
+            if (!match) {
+              return null
+            }
+
+            const [, year, month] = match
+
+            return `${type}/${year}/${month}/${date}.jpg`
+          }
+
+          const files =
+            collectJsonFiles(DATA_ROOT)
+
+          let changedFiles = 0
+          let changedItems = 0
+
+          console.log(
+            `Found ${files.length} JSON files.`
+          )
+
+          for (const file of files) {
+            let data
+
+            try {
+              data = JSON.parse(
+                fs.readFileSync(
+                  file,
+                  'utf8'
+                )
+              )
+            } catch (error) {
+              console.error(
+                `Failed to parse ${file}:`,
+                error.message
+              )
+
+              throw error
+            }
+
+            if (!Array.isArray(data.items)) {
+              continue
+            }
+
+            let fileChanged = false
+
+            for (const item of data.items) {
+              if (!item || !item.date) {
+                continue
+              }
+
+              const imagePath =
+                buildRelativeAssetPath(
+                  'images',
+                  item
+                )
+
+              const previewPath =
+                buildRelativeAssetPath(
+                  'preview',
+                  item
+                )
+
+              if (imagePath) {
+                const newImage =
+                  buildAssetUrl(
+                    imagePath
+                  )
+
+                if (
+                  item.image !== newImage
+                ) {
+                  item.image = newImage
+                  fileChanged = true
+                  changedItems += 1
+                }
+              }
+
+              if (previewPath) {
+                const newPreview =
+                  buildAssetUrl(
+                    previewPath
+                  )
+
+                if (
+                  item.preview !== newPreview
+                ) {
+                  item.preview =
+                    newPreview
+
+                  fileChanged = true
+                  changedItems += 1
+                }
+              }
+            }
+
+            if (!fileChanged) {
+              continue
+            }
+
+            fs.writeFileSync(
+              file,
+              JSON.stringify(
+                data,
+                null,
+                2
+              ) + '\n',
+              'utf8'
+            )
+
+            changedFiles += 1
+
+            console.log(
+              `Updated: ${file}`
+            )
+          }
+
+          console.log('')
+          console.log(
+            `Changed files: ${changedFiles}`
+          )
+          console.log(
+            `Changed items: ${changedItems}`
+          )
+          console.log(
+            'Migration completed.'
+          )
+          NODE
+
+      - name: Check changes
+        id: changes
+        shell: bash
+        run: |
+          if git diff --quiet; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No changes detected."
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Changes detected:"
+            git diff --stat
+          fi
+
+      - name: Commit changes
+        if: steps.changes.outputs.changed == 'true'
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/
+
+          git commit -m "chore: migrate asset URLs"
+
+          git push
