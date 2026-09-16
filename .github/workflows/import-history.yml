@@ -1,0 +1,60 @@
+name: Import Bing Wallpaper History
+
+on:
+  workflow_dispatch:
+    inputs:
+      days:
+        description: "导入最近多少天的历史壁纸"
+        required: true
+        default: "1"
+
+permissions:
+  contents: write
+
+jobs:
+  import-history:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Install dependencies
+        run: |
+          npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1
+
+      - name: Import history
+        env:
+          DAYS: ${{ github.event.inputs.days }}
+        run: |
+          node scripts/import-history.js
+
+      - name: Check changes
+        run: |
+          git status --short
+
+      - name: Commit changes
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data images preview
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "chore: import Bing wallpaper history"
+
+      - name: Push changes
+        run: |
+          git push
