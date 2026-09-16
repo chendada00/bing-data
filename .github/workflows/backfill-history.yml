@@ -1,0 +1,130 @@
+name: Backfill Bing History
+
+on:
+  # 只允许手动执行
+  workflow_dispatch:
+
+# 允许 Action 写入仓库
+permissions:
+  contents: write
+
+# 和每日任务互斥
+# 避免历史补数据时 update-bing.yml 同时修改仓库
+concurrency:
+  group: bing-wallpaper-update
+  cancel-in-progress: false
+
+jobs:
+
+  backfill:
+
+    name: Backfill Bing Historical Data
+
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Asia/Shanghai
+
+    steps:
+
+      # ========================================================
+      # 1. Checkout
+      # ========================================================
+
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+
+      # ========================================================
+      # 2. Node.js
+      # ========================================================
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+
+      # ========================================================
+      # 3. 安装依赖
+      #
+      # 必须固定版本。
+      #
+      # 你现在 update-bing.yml 已经验证过：
+      #
+      # jimp 0.16.1
+      # node-vibrant 3.2.1-alpha.1
+      #
+      # 不要升级 node-vibrant。
+      # ========================================================
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1
+
+
+      # ========================================================
+      # 4. 执行历史补齐
+      # ========================================================
+
+      - name: Backfill historical wallpapers
+        run: |
+          node scripts/backfill-history.js
+
+
+      # ========================================================
+      # 5. 查看 Git 变化
+      # ========================================================
+
+      - name: Check changes
+        run: |
+          echo "========================================"
+          echo "Git status"
+          echo "========================================"
+
+          git status --short
+
+          echo ""
+          echo "========================================"
+          echo "Changed files"
+          echo "========================================"
+
+          git diff --stat
+
+
+      # ========================================================
+      # 6. 提交历史数据
+      # ========================================================
+
+      - name: Commit historical data
+        run: |
+
+          git config user.name "github-actions[bot]"
+
+          git config user.email \
+            "41898282+github-actions[bot]@users.noreply.github.com"
+
+
+          if git diff --quiet; then
+
+            echo "No changes to commit."
+
+            exit 0
+
+          fi
+
+
+          git add \
+            data \
+            images \
+            preview
+
+
+          git commit \
+            -m "chore: backfill Bing wallpaper history"
+
+
+          git push
