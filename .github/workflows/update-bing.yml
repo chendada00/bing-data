@@ -46,7 +46,25 @@ jobs:
         with:
           fetch-depth: 1
 
+      - name: Load environment
+        run: |
+          if [ ! -f .env ]; then
+            echo "::error::.env file not found"
+            exit 1
+          fi
 
+          set -a
+          source .env
+          set +a
+
+          if [ -z "$ASSET_BASE_URL" ]; then
+            echo "::error::ASSET_BASE_URL is not configured"
+            exit 1
+          fi
+
+          echo "ASSET_BASE_URL=$ASSET_BASE_URL" >> "$GITHUB_ENV"
+
+          echo "Asset base URL: $ASSET_BASE_URL"
       # ============================================================
       # 2. Node.js
       # ============================================================
@@ -93,7 +111,25 @@ jobs:
           const Jimp = require("jimp");
           const Vibrant = require("node-vibrant");
 
+          const ASSET_BASE_URL = (
+            process.env.ASSET_BASE_URL || ""
+          ).replace(/\/$/, "");
 
+          if (!ASSET_BASE_URL) {
+            throw new Error(
+              "ASSET_BASE_URL is not configured"
+            );
+          }
+
+          function buildAssetUrl(filePath) {
+            return (
+              ASSET_BASE_URL +
+              "/" +
+              filePath
+                .replace(/\\/g, "/")
+                .replace(/^\/+/, "")
+            );
+          }
           // ========================================================
           // 基础工具
           // ========================================================
