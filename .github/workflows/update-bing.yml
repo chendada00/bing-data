@@ -60,12 +60,14 @@ jobs:
       # ============================================================
       # 3. 安装图片处理依赖
       #
-      # 使用与你原项目一致的：
+      # 使用与原项目一致的版本。
       #
-      # Jimp
-      # node-vibrant
+      # node-vibrant 新版本使用 ES Module，
+      # 原来的 require("node-vibrant") 会报：
       #
-      # 原项目也是使用这两个库处理 Base64 和主色。
+      # There is no default export in this module
+      #
+      # 所以这里固定旧版本。
       # ============================================================
 
       - name: Install dependencies
@@ -75,7 +77,7 @@ jobs:
 
 
       # ============================================================
-      # 4. 获取并保存 Bing 壁纸
+      # 4. 获取并处理 Bing 壁纸
       # ============================================================
 
       - name: Download and process Bing wallpaper
@@ -145,6 +147,7 @@ jobs:
                         "(Windows NT 10.0; Win64; x64) " +
                         "AppleWebKit/537.36 " +
                         "Chrome/140 Safari/537.36",
+
                       "Accept":
                         "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8"
                     }
@@ -152,9 +155,9 @@ jobs:
 
                   response => {
 
-                    // -----------------------------
+                    // ------------------------------------------------
                     // HTTP 重定向
-                    // -----------------------------
+                    // ------------------------------------------------
 
                     if (
                       response.statusCode >= 300 &&
@@ -178,14 +181,13 @@ jobs:
                         .then(resolve)
                         .catch(reject);
 
-
                       return;
                     }
 
 
-                    // -----------------------------
+                    // ------------------------------------------------
                     // HTTP 错误
-                    // -----------------------------
+                    // ------------------------------------------------
 
                     if (
                       response.statusCode !== 200
@@ -322,8 +324,6 @@ jobs:
 
           // ========================================================
           // RGB → HEX
-          //
-          // 和原项目保持一致
           // ========================================================
 
           function componentToHex(num) {
@@ -353,15 +353,6 @@ jobs:
 
           // ========================================================
           // 获取主色调
-          //
-          // 这里直接复用原项目 node-vibrant 的思路。
-          //
-          // 原项目：
-          //
-          // Vibrant.from(image)
-          //   .getPalette(...)
-          //
-          // 然后把所有 palette 转成 HEX。
           // ========================================================
 
           async function getMainColors(imageBuffer) {
@@ -446,13 +437,13 @@ jobs:
 
 
           // ========================================================
-          // 生成 Base64
+          // 生成极小 Base64
           //
-          // 完全参考原项目：
+          // 用于前端模糊占位。
           //
+          // 保持原项目逻辑：
           // resize(16, 9)
           // quality(90)
-          // getBase64(...)
           // ========================================================
 
           async function getBase64(
@@ -487,6 +478,191 @@ jobs:
 
 
             return base64;
+          }
+
+
+          // ========================================================
+          // 生成 Preview
+          //
+          // 首页/历史列表使用。
+          //
+          // 目标：
+          // 1600 × 900
+          // JPEG
+          // 尽量控制在 800KB 以下
+          //
+          // 如果 1600×900 仍然较大，会降低质量。
+          // 如果质量降到 70 仍然超过目标，
+          // 则进一步缩小到 1280×720。
+          // ========================================================
+
+          async function generatePreview(
+            imageBuffer,
+            previewFile
+          ) {
+
+            log(
+              "Generating preview image..."
+            );
+
+
+            const source =
+              await Jimp.read(
+                imageBuffer
+              );
+
+
+            const targetSize =
+              800 * 1024;
+
+
+            // ------------------------------------------------------
+            // 第一阶段：1600 × 900
+            // ------------------------------------------------------
+
+            const qualities = [
+              82,
+              78,
+              75,
+              72,
+              70
+            ];
+
+
+            for (
+              const quality of qualities
+            ) {
+
+              const image =
+                source.clone();
+
+
+              image
+                .resize(
+                  1600,
+                  900
+                )
+                .quality(
+                  quality
+                );
+
+
+              const buffer =
+                await image.getBufferAsync(
+                  Jimp.MIME_JPEG
+                );
+
+
+              log(
+                `Preview attempt: 1600x900, quality=${quality}, size=${Math.round(buffer.length / 1024)}KB`
+              );
+
+
+              if (
+                buffer.length <= targetSize ||
+                quality === 70
+              ) {
+
+                fs.mkdirSync(
+                  path.dirname(previewFile),
+                  {
+                    recursive: true
+                  }
+                );
+
+
+                fs.writeFileSync(
+                  previewFile,
+                  buffer
+                );
+
+
+                return {
+                  width: 1600,
+                  height: 900,
+                  quality,
+                  size: buffer.length
+                };
+
+              }
+
+            }
+
+
+            // ------------------------------------------------------
+            // 第二阶段：1280 × 720
+            //
+            // 理论上上面的循环已经会 return，
+            // 这里只是额外保险。
+            // ------------------------------------------------------
+
+            const fallbackQualities = [
+              78,
+              75,
+              72,
+              70
+            ];
+
+
+            for (
+              const quality of fallbackQualities
+            ) {
+
+              const image =
+                source.clone();
+
+
+              image
+                .resize(
+                  1280,
+                  720
+                )
+                .quality(
+                  quality
+                );
+
+
+              const buffer =
+                await image.getBufferAsync(
+                  Jimp.MIME_JPEG
+                );
+
+
+              log(
+                `Preview fallback: 1280x720, quality=${quality}, size=${Math.round(buffer.length / 1024)}KB`
+              );
+
+
+              if (
+                buffer.length <= targetSize ||
+                quality === 70
+              ) {
+
+                fs.mkdirSync(
+                  path.dirname(previewFile),
+                  {
+                    recursive: true
+                  }
+                );
+
+
+                fs.writeFileSync(
+                  previewFile,
+                  buffer
+                );
+
+
+                return {
+                  width: 1280,
+                  height: 720,
+                  quality,
+                  size: buffer.length
+                };
+
+              }
+
+            }
+
           }
 
 
@@ -556,6 +732,10 @@ jobs:
               );
 
 
+            // ------------------------------------------------------
+            // 原图目录
+            // ------------------------------------------------------
+
             const imageDir =
               path.join(
                 "images",
@@ -567,6 +747,25 @@ jobs:
             const imageFile =
               path.join(
                 imageDir,
+                `${date}.jpg`
+              );
+
+
+            // ------------------------------------------------------
+            // Preview 目录
+            // ------------------------------------------------------
+
+            const previewDir =
+              path.join(
+                "preview",
+                year,
+                month
+              );
+
+
+            const previewFile =
+              path.join(
+                previewDir,
                 `${date}.jpg`
               );
 
@@ -587,7 +786,12 @@ jobs:
 
 
             log(
-              `Image: ${imageFile}`
+              `Original: ${imageFile}`
+            );
+
+
+            log(
+              `Preview: ${previewFile}`
             );
 
 
@@ -655,7 +859,7 @@ jobs:
 
 
             // =====================================================
-            // 2. 检查今天是否已经完整
+            // 2. 查找今天已有数据
             // =====================================================
 
             const existing =
@@ -671,14 +875,26 @@ jobs:
               );
 
 
+            const previewExists =
+              fs.existsSync(
+                previewFile
+              );
+
+
+            // =====================================================
+            // 3. 如果所有数据都已经完整，直接结束
+            // =====================================================
+
             const isComplete =
               imageExists &&
+              previewExists &&
               existing &&
               existing.title &&
               existing.description &&
               existing.base64 &&
               existing.color &&
-              existing.image;
+              existing.image &&
+              existing.preview;
 
 
             if (isComplete) {
@@ -704,149 +920,282 @@ jobs:
 
 
             // =====================================================
-            // 3. 获取 Bing 官方 JSON
+            // 4. 准备图片数据
             //
-            // 与原项目 request.js 完全一致。
-            // =====================================================
-
-            const apiUrl =
-              "https://cn.bing.com/" +
-              "HPImageArchive.aspx" +
-              "?format=js" +
-              "&idx=0" +
-              "&n=1" +
-              "&mkt=zh-CN";
-
-
-            log(
-              `Requesting Bing API: ${apiUrl}`
-            );
-
-
-            const apiBuffer =
-              await requestBuffer(
-                apiUrl
-              );
-
-
-            const bingJson =
-              JSON.parse(
-                apiBuffer.toString(
-                  "utf8"
-                )
-              );
-
-
-            if (
-              !bingJson.images ||
-              !bingJson.images[0]
-            ) {
-
-              throw new Error(
-                "Bing API returned no image."
-              );
-
-            }
-
-
-            const bing =
-              bingJson.images[0];
-
-
-            log(
-              `Bing title: ${
-                bing.title || ""
-              }`
-            );
-
-
-            log(
-              `Bing copyright: ${
-                bing.copyright || ""
-              }`
-            );
-
-
-            // =====================================================
-            // 4. 生成图片 URL
-            // =====================================================
-
-            let defaultImageUrl =
-              "https://cn.bing.com" +
-              bing.url;
-
-
-            let uhdImageUrl =
-              "https://cn.bing.com" +
-              bing.urlbase +
-              "_UHD.jpg";
-
-
-            log(
-              `UHD URL: ${uhdImageUrl}`
-            );
-
-
-            // =====================================================
-            // 5. 优先下载 UHD
+            // 非常重要：
             //
-            // 如果 UHD 失败，自动使用 Bing API
-            // 返回的默认高清图。
+            // 如果原图已经存在：
+            //     直接读取本地原图
+            //
+            // 不重新下载。
+            // 不覆盖原图。
+            //
+            // 只有原图不存在时才从 Bing 下载。
             // =====================================================
 
             let imageBuffer;
-
-            let actualImageUrl;
-
-
-            try {
-
-              imageBuffer =
-                await downloadImage(
-                  uhdImageUrl
-                );
+            let actualImageUrl = null;
+            let bing = null;
 
 
-              actualImageUrl =
-                uhdImageUrl;
-
+            if (imageExists) {
 
               log(
-                "UHD image downloaded successfully."
-              );
-
-
-            } catch (error) {
-
-              log(
-                `UHD download failed: ${error.message}`
+                "Original image already exists."
               );
 
 
               log(
-                "Falling back to Bing default image..."
+                "Reading existing original image..."
               );
 
 
               imageBuffer =
-                await downloadImage(
-                  defaultImageUrl
+                fs.readFileSync(
+                  imageFile
                 );
 
 
-              actualImageUrl =
-                defaultImageUrl;
+              // 如果 JSON 已经记录过源地址，
+              // 保留原来的地址。
+              if (
+                existing &&
+                existing.sourceImage
+              ) {
+
+                actualImageUrl =
+                  existing.sourceImage;
+
+              }
 
 
               log(
-                "Default image downloaded successfully."
+                `Existing original image size: ${Math.round(imageBuffer.length / 1024)}KB`
               );
+
+
+            } else {
+
+              // ===================================================
+              // 5. 获取 Bing 官方 JSON
+              // ===================================================
+
+              const apiUrl =
+                "https://cn.bing.com/" +
+                "HPImageArchive.aspx" +
+                "?format=js" +
+                "&idx=0" +
+                "&n=1" +
+                "&mkt=zh-CN";
+
+
+              log(
+                `Requesting Bing API: ${apiUrl}`
+              );
+
+
+              const apiBuffer =
+                await requestBuffer(
+                  apiUrl
+                );
+
+
+              const bingJson =
+                JSON.parse(
+                  apiBuffer.toString(
+                    "utf8"
+                  )
+                );
+
+
+              if (
+                !bingJson.images ||
+                !bingJson.images[0]
+              ) {
+
+                throw new Error(
+                  "Bing API returned no image."
+                );
+
+              }
+
+
+              bing =
+                bingJson.images[0];
+
+
+              log(
+                `Bing title: ${bing.title || ""}`
+              );
+
+
+              log(
+                `Bing copyright: ${bing.copyright || ""}`
+              );
+
+
+              // ===================================================
+              // 6. 生成图片 URL
+              // ===================================================
+
+              const defaultImageUrl =
+                new URL(
+                  bing.url,
+                  "https://cn.bing.com"
+                ).toString();
+
+
+              let uhdImageUrl = null;
+
+
+              if (
+                bing.urlbase
+              ) {
+
+                uhdImageUrl =
+                  "https://cn.bing.com" +
+                  bing.urlbase +
+                  "_UHD.jpg";
+
+              }
+
+
+              log(
+                `UHD URL: ${uhdImageUrl || "N/A"}`
+              );
+
+
+              // ===================================================
+              // 7. 优先下载 UHD
+              // ===================================================
+
+              try {
+
+                if (
+                  !uhdImageUrl
+                ) {
+
+                  throw new Error(
+                    "Bing API does not provide urlbase."
+                  );
+
+                }
+
+
+                imageBuffer =
+                  await downloadImage(
+                    uhdImageUrl
+                  );
+
+
+                actualImageUrl =
+                  uhdImageUrl;
+
+
+                log(
+                  "UHD image downloaded successfully."
+                );
+
+
+              } catch (error) {
+
+                log(
+                  `UHD download failed: ${error.message}`
+                );
+
+
+                log(
+                  "Falling back to Bing default image..."
+                );
+
+
+                imageBuffer =
+                  await downloadImage(
+                    defaultImageUrl
+                  );
+
+
+                actualImageUrl =
+                  defaultImageUrl;
+
+
+                log(
+                  "Default image downloaded successfully."
+                );
+
+              }
+
+
+              // ===================================================
+              // 8. 保存原图
+              //
+              // 只在原图不存在的时候写入。
+              // ===================================================
+
+              fs.mkdirSync(
+                imageDir,
+                {
+                  recursive: true
+                }
+              );
+
+
+              fs.writeFileSync(
+                imageFile,
+                imageBuffer
+              );
+
+
+              log(
+                `Original image saved: ${imageFile}`
+              );
+
+
+              // 释放 bing API 对象供后面使用
 
             }
 
 
             // =====================================================
-            // 6. 检查图片
+            // 9. 如果没有 Bing API 数据，但是已有 JSON 数据
+            // =====================================================
+            //
+            // 这种情况主要用于：
+            //
+            // 已经存在原图
+            // 但 preview 缺失
+            //
+            // 此时完全不需要再次访问 Bing。
+            // =====================================================
+
+            if (
+              !bing &&
+              existing
+            ) {
+
+              bing = {
+                title:
+                  existing.title,
+
+                copyright:
+                  existing.copyright ||
+                  existing.description,
+
+                copyrightlink:
+                  existing.copyrightLink,
+
+                url:
+                  null,
+
+                urlbase:
+                  null
+              };
+
+            }
+
+
+            // =====================================================
+            // 10. 获取图片尺寸
             // =====================================================
 
             const image =
@@ -855,204 +1204,232 @@ jobs:
               );
 
 
+            const width =
+              image.bitmap.width;
+
+
+            const height =
+              image.bitmap.height;
+
+
             log(
-              `Image size: ${
-                image.bitmap.width
-              }x${
-                image.bitmap.height
-              }`
+              `Image size: ${width}x${height}`
             );
 
 
+            // =====================================================
+            // 11. 生成 Base64
+            //
+            // 如果原来的 Base64 已经存在，
+            // 可以继续使用，避免重复编码。
+            // =====================================================
+
+            let base64;
+
+
             if (
-              image.bitmap.width < 100 ||
-              image.bitmap.height < 100
+              existing &&
+              existing.base64
             ) {
 
-              throw new Error(
-                "Downloaded image dimensions are invalid."
+              base64 =
+                existing.base64;
+
+
+              log(
+                "Using existing Base64 thumbnail."
+              );
+
+            } else {
+
+              base64 =
+                await getBase64(
+                  imageBuffer
+                );
+
+            }
+
+
+            // =====================================================
+            // 12. 获取颜色
+            //
+            // 如果已经有颜色数据，
+            // 直接复用。
+            // =====================================================
+
+            let colors;
+
+
+            if (
+              existing &&
+              existing.color
+            ) {
+
+              colors =
+                existing.color;
+
+
+              log(
+                "Using existing color palette."
+              );
+
+            } else {
+
+              colors =
+                await getMainColors(
+                  imageBuffer
+                );
+
+            }
+
+
+            // =====================================================
+            // 13. 生成 Preview
+            //
+            // 如果已经存在 preview：
+            //     不重新生成。
+            //
+            // 如果不存在：
+            //     从本地原图生成。
+            // =====================================================
+
+            let previewInfo = null;
+
+
+            if (
+              previewExists
+            ) {
+
+              log(
+                "Preview image already exists."
+              );
+
+
+            } else {
+
+              previewInfo =
+                await generatePreview(
+                  imageBuffer,
+                  previewFile
+                );
+
+
+              log(
+                `Preview generated: ${Math.round(previewInfo.size / 1024)}KB`
               );
 
             }
 
 
             // =====================================================
-            // 7. 创建目录
+            // 14. 获取最终 URL
             // =====================================================
-
-            fs.mkdirSync(
-              imageDir,
-              {
-                recursive: true
-              }
-            );
-
-
-            fs.mkdirSync(
-              yearDir,
-              {
-                recursive: true
-              }
-            );
-
-
-            // =====================================================
-            // 8. 保存高清图片
-            // =====================================================
-
-            log(
-              "Saving HD image..."
-            );
-
-
-            await image.writeAsync(
-              imageFile
-            );
-
-
-            // =====================================================
-            // 9. Base64
-            // =====================================================
-
-            const base64 =
-              await getBase64(
-                imageBuffer
-              );
-
-
-            log(
-              `Base64 generated: ${
-                base64.length
-              } characters`
-            );
-
-
-            // =====================================================
-            // 10. 主色调
-            // =====================================================
-
-            const color =
-              await getMainColors(
-                imageBuffer
-              );
-
-
-            log(
-              `Color palette: ${
-                JSON.stringify(
-                  color
-                )
-              }`
-            );
-
-
-            // =====================================================
-            // 11. 构建图片地址
-            //
-            // 这里使用 raw.githubusercontent.com
-            // 让 A 仓库直接读取。
-            // =====================================================
-
-            const rawBase =
-              "https://raw.githubusercontent.com/" +
-              "chendada00/bing-data/main";
-
 
             const imageUrl =
-              `${rawBase}/images/` +
-              `${year}/${month}/${date}.jpg`;
+              `https://raw.githubusercontent.com/chendada00/bing-data/main/images/${year}/${month}/${date}.jpg`;
+
+
+            const previewUrl =
+              `https://raw.githubusercontent.com/chendada00/bing-data/main/preview/${year}/${month}/${date}.jpg`;
 
 
             // =====================================================
-            // 12. 构建 JSON
-            //
-            // 不人为制造 subtitle。
-            //
-            // title:
-            //   Bing 官方 title
-            //
-            // description:
-            //   Bing 官方 copyright
-            //
-            // copyright:
-            //   同样保留原始版权信息
+            // 15. 生成当天 JSON 数据
             // =====================================================
 
             const item = {
 
-              // 日期
               date,
 
-              // Bing 官方标题
               title:
-                bing.title || "",
+                bing.title ||
+                (existing && existing.title) ||
+                "",
 
-              // Bing 官方 copyright
-              //
-              // 当前作为描述使用。
+              // Bing 当前 API 如果只返回一段描述，
+              // 就直接保存这一段。
               description:
-                bing.copyright || "",
+                bing.copyright ||
+                (existing && existing.description) ||
+                "",
 
-              // 原始版权信息
               copyright:
-                bing.copyright || "",
+                bing.copyright ||
+                (existing && existing.copyright) ||
+                "",
 
-              // Bing 搜索详情地址
               copyrightLink:
-                bing.copyrightlink || null,
+                bing.copyrightlink ||
+                (existing && existing.copyrightLink) ||
+                null,
 
-              // 高清图片
+              // 原始 UHD 图
               image:
                 imageUrl,
 
-              // 实际下载地址
-              sourceImage:
-                actualImageUrl,
+              // 首页/历史列表展示图
+              preview:
+                previewUrl,
 
-              // 16x9 Base64
+              // Bing 原始图片地址
+              sourceImage:
+                actualImageUrl ||
+                (existing && existing.sourceImage) ||
+                null,
+
+              // 极小 Base64，占位使用
               base64,
 
-              // node-vibrant 调色板
-              color,
+              // 主色
+              color:
+                colors,
 
-              // 图片尺寸
-              width:
-                image.bitmap.width,
+              width,
 
-              height:
-                image.bitmap.height,
+              height,
 
-              // Bing 内部标识
+              // 保留 Bing 的一些日期信息
               id:
-                bing.hsh || null,
+                bing.hsh ||
+                (existing && existing.id) ||
+                null,
 
-              // Bing 数据
               startDate:
-                bing.startdate || null,
+                bing.startdate ||
+                (existing && existing.startDate) ||
+                null,
 
               fullStartDate:
-                bing.fullstartdate || null,
+                bing.fullstartdate ||
+                (existing && existing.fullStartDate) ||
+                null,
 
               endDate:
-                bing.enddate || null
+                bing.enddate ||
+                (existing && existing.endDate) ||
+                null
+
             };
 
 
             // =====================================================
-            // 13. 更新当天记录
+            // 16. 更新月 JSON
             // =====================================================
 
-            const index =
+            const existingIndex =
               monthData.items.findIndex(
-                oldItem =>
-                  oldItem.date === date
+                item =>
+                  item.date === date
               );
 
 
-            if (index >= 0) {
+            if (
+              existingIndex >= 0
+            ) {
 
-              monthData.items[index] =
-                item;
+              monthData.items[
+                existingIndex
+              ] = item;
 
             } else {
 
@@ -1063,9 +1440,9 @@ jobs:
             }
 
 
-            // =====================================================
-            // 14. 按日期排序
-            // =====================================================
+            // -----------------------------------------------------
+            // 按日期排序
+            // -----------------------------------------------------
 
             monthData.items.sort(
               (a, b) =>
@@ -1080,103 +1457,31 @@ jobs:
 
 
             // =====================================================
-            // 15. 保存 JSON
+            // 17. 保存 JSON
             // =====================================================
 
+            fs.mkdirSync(
+              yearDir,
+              {
+                recursive: true
+              }
+            );
+
+
             fs.writeFileSync(
-
               jsonFile,
-
               JSON.stringify(
                 monthData,
                 null,
                 2
               ) + "\n",
-
               "utf8"
-
             );
 
 
             // =====================================================
-            // 16. 最终完整性检查
+            // 18. 输出最终结果
             // =====================================================
-
-            if (
-              !fs.existsSync(
-                imageFile
-              )
-            ) {
-
-              throw new Error(
-                "Final check failed: image does not exist."
-              );
-
-            }
-
-
-            const finalJson =
-              JSON.parse(
-                fs.readFileSync(
-                  jsonFile,
-                  "utf8"
-                )
-              );
-
-
-            const finalItem =
-              finalJson.items.find(
-                item =>
-                  item.date === date
-              );
-
-
-            if (
-              !finalItem
-            ) {
-
-              throw new Error(
-                "Final check failed: JSON item missing."
-              );
-
-            }
-
-
-            if (
-              !finalItem.base64
-            ) {
-
-              throw new Error(
-                "Final check failed: Base64 missing."
-              );
-
-            }
-
-
-            if (
-              !finalItem.color ||
-              Object.keys(
-                finalItem.color
-              ).length === 0
-            ) {
-
-              throw new Error(
-                "Final check failed: color missing."
-              );
-
-            }
-
-
-            if (
-              !finalItem.image
-            ) {
-
-              throw new Error(
-                "Final check failed: image URL missing."
-              );
-
-            }
-
 
             log(
               "========================================"
@@ -1184,7 +1489,7 @@ jobs:
 
 
             log(
-              "Bing wallpaper update SUCCESS."
+              "Bing wallpaper update completed."
             );
 
 
@@ -1194,7 +1499,12 @@ jobs:
 
 
             log(
-              `Image: ${imageFile}`
+              `Original: ${imageFile}`
+            );
+
+
+            log(
+              `Preview: ${previewFile}`
             );
 
 
@@ -1204,26 +1514,27 @@ jobs:
 
 
             log(
-              `Title: ${item.title}`
+              `Original URL: ${imageUrl}`
             );
 
 
             log(
-              `Description: ${item.description}`
+              `Preview URL: ${previewUrl}`
             );
 
 
             log(
-              `Color: ${
-                JSON.stringify(
-                  item.color
-                )
-              }`
+              `Image size: ${width}x${height}`
             );
 
 
             log(
-              "========================================"
+              `Original file size: ${Math.round(imageBuffer.length / 1024)}KB`
+            );
+
+
+            log(
+              "========================================";
 
             );
 
@@ -1231,7 +1542,7 @@ jobs:
 
 
           // ========================================================
-          // 启动
+          // 执行
           // ========================================================
 
           main()
@@ -1241,21 +1552,17 @@ jobs:
                 "========================================"
               );
 
-
               console.error(
-                "Bing wallpaper update FAILED"
+                "Bing wallpaper update failed."
               );
-
 
               console.error(
                 error
               );
 
-
               console.error(
                 "========================================"
               );
-
 
               process.exit(1);
 
@@ -1265,37 +1572,22 @@ jobs:
 
 
       # ============================================================
-      # 5. 提交
+      # 5. 提交修改
       # ============================================================
 
-      - name: Commit changes
+      - name: Commit and push changes
         run: |
 
-          git config \
-            user.name \
-            "github-actions[bot]"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git config \
-            user.email \
-            "41898282+github-actions[bot]@users.noreply.github.com"
-
-
-          git add \
-            images \
-            data
-
+          git add data/ images/ preview/
 
           if git diff --cached --quiet; then
-
             echo "No changes to commit."
-
             exit 0
-
           fi
 
-
-          git commit \
-            -m "chore: update Bing wallpaper"
-
+          git commit -m "Update Bing wallpaper"
 
           git push
