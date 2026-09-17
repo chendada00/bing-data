@@ -35,7 +35,7 @@ const END_DATE_INPUT =
 
 const ASSET_BASE_URL = (
   process.env.ASSET_BASE_URL ||
-  'https://raw.githubusercontent.com/chendada00/bing-data/main'
+  'https://bing-data.伴随.cn'
 ).replace(/\/+$/, '')
 
 // ============================================================
