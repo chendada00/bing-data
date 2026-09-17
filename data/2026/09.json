@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 9,
-  "updatedAt": "2026-09-16T18:36:44.553Z",
+  "updatedAt": "2026-09-17T18:45:20.961Z",
   "items": [
     {
       "date": "2026-09-01",
@@ -428,6 +428,31 @@
       "startDate": "20260916",
       "fullStartDate": "202609161600",
       "endDate": "20260917"
+    },
+    {
+      "date": "2026-09-18",
+      "title": "穿越山口腹地",
+      "description": "温纳茨山口，峰区国家公园，英格兰 (© Daniel_Kay/Getty Images)",
+      "copyright": "温纳茨山口，峰区国家公园，英格兰 (© Daniel_Kay/Getty Images)",
+      "copyrightLink": "https://www.bing.com/search?q=%E5%B3%B0%E5%8C%BA%E5%9B%BD%E5%AE%B6%E5%85%AC%E5%9B%AD&form=hpcapt&mkt=zh-cn",
+      "image": "https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-18.jpg",
+      "preview": "https://raw.githubusercontent.com/chendada00/bing-data/main/preview/2026/09/2026-09-18.jpg",
+      "sourceImage": "https://cn.bing.com/th?id=OHR.WinnatsPassPeak_ZH-CN4443458412_UHD.jpg",
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/AOe+CP7V0ui3EtnqunWMzrblrd1mlAVxwvylixHqAc181iZSqpy5fzPVwuMdJPnf5GF8Rfjr8Qb+4vtYvtXaymnOLSC2CLHGnB3NnJRSOxJb1yeR42Hq4aopxu212vvf1HUxmK5o2la/ofPPw/8A+Qqn/XM/1r6DF/wKh41P+LE2tX/5Deu/7o/9DNfN4f4IFz/iz/rqf//Z",
+      "color": {
+        "Vibrant": "#c79d33",
+        "DarkVibrant": "#665f09",
+        "LightVibrant": "#f9b07b",
+        "Muted": "#958273",
+        "DarkMuted": "#69633c",
+        "LightMuted": "#b89987"
+      },
+      "width": 3840,
+      "height": 2160,
+      "id": "d427660ce0d0a746d4918781cdf36250",
+      "startDate": "20260917",
+      "fullStartDate": "202609171600",
+      "endDate": "20260918"
     }
   ]
 }
