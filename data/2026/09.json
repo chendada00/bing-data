@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 9,
-  "updatedAt": "2026-09-17T18:45:20.961Z",
+  "updatedAt": "2026-09-18T18:01:31.097Z",
   "items": [
     {
       "date": "2026-09-01",
@@ -453,6 +453,31 @@
       "startDate": "20260917",
       "fullStartDate": "202609171600",
       "endDate": "20260918"
+    },
+    {
+      "date": "2026-09-19",
+      "title": "慕尼黑啤酒节的阿尔卑斯之声",
+      "description": "阿尔卑斯长号演奏者，巴伐利亚州，德国 (© U. J. Alexander/Shutterstock)",
+      "copyright": "阿尔卑斯长号演奏者，巴伐利亚州，德国 (© U. J. Alexander/Shutterstock)",
+      "copyrightLink": "https://www.bing.com/search?q=%E6%85%95%E5%B0%BC%E9%BB%91%E5%95%A4%E9%85%92%E8%8A%82&form=hpcapt&mkt=zh-cn",
+      "image": "https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-19.jpg",
+      "preview": "https://raw.githubusercontent.com/chendada00/bing-data/main/preview/2026/09/2026-09-19.jpg",
+      "sourceImage": "https://cn.bing.com/th?id=OHR.AlphornBavaria_ZH-CN5896237112_UHD.jpg",
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/AO51DVPh3pFvFf8AiCfSdW1Sy8yWGG1nRnuRjJVxnbnOMbv1r148Rzy+lKlCukn0vqrdux5NTLsPjKkatWN3Hr0179y74I/bUj/tEx32haZpegSygSRTXwkkKmGZs4ThAHWIYIJ/edeMjw4ZnhpO8qqT73uejJqKstUfDsX/AB7P/vD+dfmyMGM1X77fj/StaPQR/9k=",
+      "color": {
+        "Vibrant": "#126ccc",
+        "DarkVibrant": "#384c0a",
+        "LightVibrant": "#b0c6f0",
+        "Muted": "#617cb8",
+        "DarkMuted": "#5b4628",
+        "LightMuted": "#b3bad6"
+      },
+      "width": 3840,
+      "height": 2160,
+      "id": "aa60b4eff899d1166af4abf256daaa9f",
+      "startDate": "20260918",
+      "fullStartDate": "202609181600",
+      "endDate": "20260919"
     }
   ]
 }
