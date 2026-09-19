@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 9,
-  "updatedAt": "2026-09-18T18:01:31.097Z",
+  "updatedAt": "2026-09-19T17:41:58.701Z",
   "items": [
     {
       "date": "2026-09-01",
@@ -478,6 +478,31 @@
       "startDate": "20260918",
       "fullStartDate": "202609181600",
       "endDate": "20260919"
+    },
+    {
+      "date": "2026-09-20",
+      "title": "终获巴黎青睐的铁塔",
+      "description": "日落时分的埃菲尔铁塔，巴黎，法国 (© Alexander Spatari/Getty Images)",
+      "copyright": "日落时分的埃菲尔铁塔，巴黎，法国 (© Alexander Spatari/Getty Images)",
+      "copyrightLink": "https://www.bing.com/search?q=%E5%B7%B4%E9%BB%8E&form=hpcapt&mkt=zh-cn",
+      "image": "https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-20.jpg",
+      "preview": "https://raw.githubusercontent.com/chendada00/bing-data/main/preview/2026/09/2026-09-20.jpg",
+      "sourceImage": "https://cn.bing.com/th?id=OHR.ParisSunset_ZH-CN6050686638_UHD.jpg",
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APqnx3+0zovheRvtAWck4VI2BY56cV+V4HH5rjrt2iv67H6ZUyijhaalVlqeWaj+1H4T1+bfJHq1lJEMlbeURqv+1gnjvzX0NLC5hTV3UVvyOKNTByfIo3fp/wAE+bvib/rz/wBdov8A0Ja2yz+GvX9Tvzjc8XvP+Qr/ANsH/wDQRX1MtkfBw/iH/9k=",
+      "color": {
+        "Vibrant": "#f9af4d",
+        "DarkVibrant": "#4e3120",
+        "LightVibrant": "#fbb979",
+        "Muted": "#946865",
+        "DarkMuted": "#59413e",
+        "LightMuted": "#b4b4cc"
+      },
+      "width": 3840,
+      "height": 2160,
+      "id": "223a4f5afd837772060bf1f172590482",
+      "startDate": "20260919",
+      "fullStartDate": "202609191600",
+      "endDate": "20260920"
     }
   ]
 }
