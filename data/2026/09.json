@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 9,
-  "updatedAt": "2026-09-19T17:41:58.701Z",
+  "updatedAt": "2026-09-20T17:53:03.910Z",
   "items": [
     {
       "date": "2026-09-01",
@@ -503,6 +503,31 @@
       "startDate": "20260919",
       "fullStartDate": "202609191600",
       "endDate": "20260920"
+    },
+    {
+      "date": "2026-09-21",
+      "title": "皮毛与海洋之间的生命",
+      "description": "正在梳理皮毛的海獭，蒙特雷湾，加利福尼亚州，美国 (© Suzi Eszterhas/Minden Pictures)",
+      "copyright": "正在梳理皮毛的海獭，蒙特雷湾，加利福尼亚州，美国 (© Suzi Eszterhas/Minden Pictures)",
+      "copyrightLink": "https://www.bing.com/search?q=%E6%B5%B7%E7%8D%AD%E8%AE%A4%E7%9F%A5%E5%91%A8&form=hpcapt&mkt=zh-cn",
+      "image": "https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-21.jpg",
+      "preview": "https://raw.githubusercontent.com/chendada00/bing-data/main/preview/2026/09/2026-09-21.jpg",
+      "sourceImage": "https://cn.bing.com/th?id=OHR.GroomingOtter_ZH-CN6969472572_UHD.jpg",
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APLIPiRoOoztEmsWN7CkqxylAE477GdgpOM9TgnjrxXt1sXCnSlVppyt2ueLTwlSpUjTnZX72O/8e2/hXw4tgdO1O0u4b2R4YUa7jmeRQCwkJVVABUfdIyPU15OVZtVx1V0qsbf1tuejmOW0sJSVSm7nwHN/yEbv/roa3wn8CReK/jRPfNA/5Augf7jf+izXlZN/vs/mb5p/uq+R/9k=",
+      "color": {
+        "Vibrant": "#ac843c",
+        "DarkVibrant": "#1b3c58",
+        "LightVibrant": "#f8deb4",
+        "Muted": "#61819d",
+        "DarkMuted": "#55432d",
+        "LightMuted": "#778fac"
+      },
+      "width": 3840,
+      "height": 2160,
+      "id": "5c6d94abf6b1fbfcbd06fd32741762cb",
+      "startDate": "20260920",
+      "fullStartDate": "202609201600",
+      "endDate": "20260921"
     }
   ]
 }
