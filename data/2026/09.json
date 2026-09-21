@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 9,
-  "updatedAt": "2026-09-20T17:53:03.910Z",
+  "updatedAt": "2026-09-21T19:51:02.041Z",
   "items": [
     {
       "date": "2026-09-01",
@@ -528,6 +528,31 @@
       "startDate": "20260920",
       "fullStartDate": "202609201600",
       "endDate": "20260921"
+    },
+    {
+      "date": "2026-09-22",
+      "title": "金色时节",
+      "description": "瓜兹曼山口附近的秋日山杨林，犹他州，美国 (© Danita Delimont/Shutterstock)",
+      "copyright": "瓜兹曼山口附近的秋日山杨林，犹他州，美国 (© Danita Delimont/Shutterstock)",
+      "copyrightLink": "https://www.bing.com/search?q=%E7%93%9C%E5%85%B9%E6%9B%BC%E5%B1%B1%E5%8F%A3%E9%99%84%E8%BF%91%E7%9A%84%E7%A7%8B%E6%97%A5%E5%B1%B1%E6%9D%A8%E6%9E%97&form=hpcapt&mkt=zh-cn",
+      "image": "https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-22.jpg",
+      "preview": "https://raw.githubusercontent.com/chendada00/bing-data/main/preview/2026/09/2026-09-22.jpg",
+      "sourceImage": "https://cn.bing.com/th?id=OHR.FallAspens_ZH-CN7235054933_UHD.jpg",
+      "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/ANzTPGNjZrmXW5JAzEIgRE6ZyMc5PT8q/AsVWx9eMoYbCxgktXzya12f2fOyt69D7GliI0nec7vpol/mTR+JrG+1C50k3b3EjESYNyu5VP8AdAAwRkjnPauSOOzLAUKOY4eXs3G60jLWS7ttpp6euug5yhinLD1PeT81ovLTf/gHm8fXSP8Aef8ArX9FT2qeh8WjS8N/8tv+uqf+hV8xnf8ACp+r/I9LC7v5H//Z",
+      "color": {
+        "Vibrant": "#e9b816",
+        "DarkVibrant": "#b09906",
+        "LightVibrant": "#92b1dd",
+        "Muted": "#9b8968",
+        "DarkMuted": "#333c48",
+        "LightMuted": "#cdb1a0"
+      },
+      "width": 3840,
+      "height": 2160,
+      "id": "80574239946b5ff91d19e3d3b047dad5",
+      "startDate": "20260921",
+      "fullStartDate": "202609211600",
+      "endDate": "20260922"
     }
   ]
 }
