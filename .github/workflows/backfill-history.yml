@@ -70,16 +70,33 @@ jobs:
 
       - name: Commit historical data
         run: |
+          set -e
+      
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          if git diff --quiet; then
+      
+          echo "========================================"
+          echo "Git status before add"
+          echo "========================================"
+      
+          git status --short
+      
+          # 先将新增和修改的历史数据加入暂存区
+          git add data images preview
+      
+          echo "========================================"
+          echo "Git status after add"
+          echo "========================================"
+      
+          git status --short
+      
+          # 检查暂存区，而不是检查工作区
+          if git diff --cached --quiet; then
             echo "No changes to commit."
             exit 0
           fi
-
-          git add data images preview
-
+      
           git commit -m "chore: backfill Bing wallpaper history"
-
-          git push
+      
+          # 明确推送当前 Action 所在分支
+          git push origin HEAD:${GITHUB_REF_NAME}
