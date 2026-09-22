@@ -1,0 +1,69 @@
+name: Backfill Color Histogram
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_year:
+        description: "开始年份（可留空，默认全部）"
+        required: false
+        type: string
+        default: ""
+      end_year:
+        description: "结束年份（可留空，默认全部）"
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bing-color-histogram-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: Backfill Color Histogram
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Asia/Shanghai
+      START_YEAR: ${{ inputs.start_year }}
+      END_YEAR: ${{ inputs.end_year }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install jimp@0.16.1
+
+      - name: Backfill color histogram
+        run: |
+          node scripts/backfill-color-histogram.js
+
+      - name: Commit changes
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/
+
+          if git diff --cached --quiet; then
+            echo "No changes to commit."
+            exit 0
+          fi
+
+          git commit -m "feat: backfill color histograms"
+          git push origin HEAD:${GITHUB_REF_NAME}
