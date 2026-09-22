@@ -931,7 +931,8 @@ jobs:
               existing.base64 &&
               existing.color &&
               existing.image &&
-              existing.preview;
+              existing.preview &&
+              isValidColorHistogram(existing.colorHistogram);
 
 
             if (isComplete) {
