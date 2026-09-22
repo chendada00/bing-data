@@ -5,6 +5,7 @@ const http = require('http')
 
 const Jimp = require('jimp')
 const Vibrant = require('node-vibrant')
+const { getColorHistogram, isValidColorHistogram } = require('./color-histogram')
 
 // ============================================================
 // 基础配置
@@ -1304,6 +1305,31 @@ async function processItem(source) {
   }
 
   // ----------------------------------------------------------
+  // 补齐颜色直方图
+  // ----------------------------------------------------------
+
+  let colorHistogram =
+    existing &&
+    isValidColorHistogram(
+      existing.colorHistogram
+    )
+      ? existing.colorHistogram
+      : null
+
+  if (!colorHistogram) {
+    colorHistogram =
+      await getColorHistogram(
+        imageFile
+      )
+
+    jsonRepaired = true
+
+    console.log(
+      `[${date}] Color histogram generated`
+    )
+  }
+
+  // ----------------------------------------------------------
   // 生成 JSON 数据
   // ----------------------------------------------------------
 
@@ -1315,6 +1341,7 @@ async function processItem(source) {
       previewUrl,
       base64,
       color,
+      colorHistogram,
       width,
       height
     })
