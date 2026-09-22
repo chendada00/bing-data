@@ -1,563 +1,674 @@
-# Bing Wallpaper Data
+# 🗃️ Bing Wallpaper Data
 
-Bing 每日壁纸数据与图片归档仓库。
+Bing 壁纸历史数据仓库。
 
-本项目负责从 Bing 获取每日壁纸，保存 UHD 原图，同时生成适合网页展示的 Preview、小尺寸 Base64 占位图以及图片主色调，并通过 GitHub Actions 自动维护历史数据。
+这个项目负责从 Bing 获取每日壁纸相关信息，并对原始图片进行保存、压缩、缩略图生成和颜色分析，最终按照月份整理为结构化 JSON 数据，供 [`bing-wallpaper`](https://github.com/chendada00/bing-wallpaper) 等前端项目使用。
 
-本仓库与前端项目 [bing-wallpaper](https://github.com/chendada00/bing-wallpaper) 配套使用。
-
----
-
-## 项目简介
-
-`bing-data` 是整个 Bing 壁纸项目的数据层。
-
-主要负责：
-
-- 获取 Bing 每日壁纸
-- 保存 3840 × 2160 UHD 原图
-- 生成 1600 × 900 Preview 图片
-- 生成 16 × 9 极小 Base64 图片，用于前端模糊占位
-- 提取图片主色调
-- 保存 Bing 壁纸标题、描述、版权信息等元数据
-- 按年月组织历史数据
-- 通过 GitHub Actions 自动更新
-- 支持自定义图片资源域名
-- 支持批量迁移历史 JSON 中的图片 URL
-
-项目不依赖数据库，所有数据和图片均直接存储在 Git 仓库中。
+> 🖼️ 这是一个**数据生产仓库**，不是前端展示项目。  
+> 📦 图片资源较多，仓库体积会随着历史数据持续增长。
 
 ---
 
-## 项目结构
+# ✨ 项目职责
+
+本仓库主要负责：
+
+- 🌐 获取 Bing 每日壁纸信息
+- 🖼️ 下载高清原始壁纸
+- 🔗 保存 Bing 图片元数据
+- 📐 保存图片尺寸
+- 🪄 生成 Preview 图片
+- 🧩 生成 Base64 小缩略图
+- 🎨 提取图片主色
+- 🗂️ 按年月组织历史数据
+- 🔄 更新当前 Bing 壁纸
+- 🛠️ 回填历史数据
+- ♻️ 修复和迁移历史数据
+- 🚀 通过 GitHub Actions 自动执行任务
+
+---
+
+# 🏗️ 数据处理架构
+
+整体数据流：
+
+```text
+                         Bing
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │ 获取每日壁纸信息 │
+                 └────────┬────────┘
+                          │
+                          ▼
+                 ┌─────────────────┐
+                 │ 下载 UHD / 原图 │
+                 └────────┬────────┘
+                          │
+              ┌───────────┼───────────┐
+              │           │           │
+              ▼           ▼           ▼
+          原始图片      Preview      Base64
+              │           │           │
+              │           │           │
+              └───────────┼───────────┘
+                          │
+                          ▼
+                    🎨 主色提取
+                          │
+                          ▼
+                    🗂️ 月度 JSON
+                          │
+                          ▼
+                  Git Commit / Push
+```
+
+---
+
+# 📁 目录结构
+
+核心结构：
 
 ```text
 bing-data/
-├── .env
+├── .github/
+│   └── workflows/
+│       ├── update-bing.yml
+│       ├── backfill-history.yml
+│       └── migrate-history.yml
 │
 ├── data/
-│   └── 2026/
-│       └── 09.json
+│   └── YYYY/
+│       └── MM.json
 │
 ├── images/
-│   └── 2026/
-│       └── 09/
-│           └── 2026-09-16.jpg
+│   └── YYYY/
+│       └── MM/
+│           └── YYYY-MM-DD.jpg
 │
 ├── preview/
-│   └── 2026/
-│       └── 09/
-│           └── 2026-09-16.jpg
+│   └── YYYY/
+│       └── MM/
+│           └── YYYY-MM-DD.jpg
 │
-└── .github/
-    └── workflows/
-        ├── update-bing.yml
-        └── migrate-history.yml
+├── scripts/
+│   └── backfill-history.js
+│
+├── .env
+├── _headers
+└── README.md
 ```
-
-### data
-
-保存按月份组织的 JSON 数据。
-
-格式：
-
-```text
-data/YYYY/MM.json
-```
-
-例如：
-
-```text
-data/2026/09.json
-```
-
-### images
-
-保存 Bing UHD 原图。
-
-格式：
-
-```text
-images/YYYY/MM/YYYY-MM-DD.jpg
-```
-
-例如：
-
-```text
-images/2026/09/2026-09-16.jpg
-```
-
-原图通常为：
-
-```text
-3840 × 2160
-```
-
-### preview
-
-保存用于网页列表展示的压缩图片。
-
-默认优先生成：
-
-```text
-1600 × 900
-```
-
-如果图片仍然较大，会降低 JPEG 质量；必要时进一步使用：
-
-```text
-1280 × 720
-```
-
-Preview 主要用于网页列表，可以明显减少首页加载流量。
 
 ---
 
-## JSON 数据格式
+# 🗂️ 数据组织方式
 
-每个月对应一个 JSON 文件。
+数据按照：
 
-示例：
+```text
+年 / 月
+```
+
+进行拆分。
+
+例如：
+
+```text
+data/
+└── 2026/
+    ├── 01.json
+    ├── 02.json
+    ├── 03.json
+    ├── ...
+    └── 09.json
+```
+
+对应图片：
+
+```text
+images/
+└── 2026/
+    └── 09/
+        ├── 2026-09-01.jpg
+        ├── 2026-09-02.jpg
+        └── ...
+```
+
+Preview：
+
+```text
+preview/
+└── 2026/
+    └── 09/
+        ├── 2026-09-01.jpg
+        ├── 2026-09-02.jpg
+        └── ...
+```
+
+这种结构可以避免所有历史数据集中到一个超大的 JSON 文件中，同时方便前端按照月份进行懒加载。
+
+---
+
+# 📄 JSON 数据格式
+
+每个月对应一个 JSON 文件：
 
 ```json
 {
   "version": 1,
   "year": 2026,
   "month": 9,
-  "updatedAt": "2026-09-16T08:02:25.509Z",
+  "updatedAt": "2026-09-21T19:51:02.041Z",
   "items": [
     {
-      "date": "2026-09-16",
-      "title": "北极的新晋探索者",
-      "description": "斯瓦尔巴群岛玩耍的北极熊幼崽，挪威",
-      "copyright": "斯瓦尔巴群岛玩耍的北极熊幼崽，挪威",
-      "copyrightLink": "https://www.bing.com/search?q=...",
-      "image": "https://bing-data.伴随.cn/images/2026/09/2026-09-16.jpg",
-      "preview": "https://bing-data.伴随.cn/preview/2026/09/2026-09-16.jpg",
-      "sourceImage": "https://cn.bing.com/th?id=...",
+      "date": "2026-09-01",
+      "title": "Wallpaper title",
+      "description": "Wallpaper description",
+      "copyright": "Copyright information",
+      "copyrightLink": "https://...",
+      "image": "https://...",
+      "preview": "https://...",
+      "sourceImage": "https://...",
       "base64": "data:image/jpeg;base64,...",
       "color": {
-        "Vibrant": "#8cbbcc",
-        "DarkVibrant": "#294e5c",
-        "LightVibrant": "#e3f4fb",
-        "Muted": "#7c9c9f",
-        "DarkMuted": "#4e5445",
-        "LightMuted": "#afc8d1"
+        "Vibrant": "#123456",
+        "DarkVibrant": "#123456",
+        "LightVibrant": "#123456",
+        "Muted": "#123456",
+        "DarkMuted": "#123456",
+        "LightMuted": "#123456"
       },
-      "width": 3840,
-      "height": 2160,
-      "id": "3464e2609dc4cc5a425308f4e13b7ea0",
-      "startDate": "20260915",
-      "fullStartDate": "202609151600",
-      "endDate": "20260916"
+      "width": 1920,
+      "height": 1080,
+      "id": "xxxxxx",
+      "startDate": "...",
+      "fullStartDate": "...",
+      "endDate": "..."
     }
   ]
 }
 ```
 
-### 字段说明
+---
+
+# 🧱 字段说明
 
 | 字段 | 说明 |
-| --- | --- |
-| `date` | 壁纸日期 |
+|---|---|
+| `date` | 壁纸对应日期 |
 | `title` | Bing 壁纸标题 |
-| `description` | Bing 壁纸描述 |
-| `copyright` | 图片版权信息 |
-| `copyrightLink` | Bing 相关链接 |
-| `image` | UHD 原图地址 |
+| `description` | 壁纸描述 |
+| `copyright` | 版权信息 |
+| `copyrightLink` | 版权相关链接 |
+| `image` | 项目保存的原始高清图片地址 |
 | `preview` | Preview 图片地址 |
-| `sourceImage` | Bing 原始图片地址 |
-| `base64` | 极小 Base64 占位图 |
+| `sourceImage` | 原始来源图片地址 |
+| `base64` | 极小尺寸 Base64 缩略图 |
 | `color` | 图片主色调 |
 | `width` | 原图宽度 |
 | `height` | 原图高度 |
-| `id` | Bing 图片 ID |
-| `startDate` | Bing 起始日期 |
-| `fullStartDate` | Bing 完整起始时间 |
-| `endDate` | Bing 结束日期 |
+| `id` | 项目生成的数据 ID |
+| `startDate` | Bing 数据中的开始日期 |
+| `fullStartDate` | Bing 数据中的完整开始时间 |
+| `endDate` | Bing 数据中的结束日期 |
 
 ---
 
-## 图片处理流程
+# 🖼️ 图片处理
 
-每次 GitHub Actions 执行时，大致按照以下流程工作：
+每日图片会产生多个层级：
 
 ```text
-Bing
- │
- ▼
-获取壁纸元数据
- │
- ▼
-下载 UHD 原图
- │
- ├── 保存 images/YYYY/MM/YYYY-MM-DD.jpg
- │
- ├── 生成 Preview
- │      │
- │      └── 保存 preview/YYYY/MM/YYYY-MM-DD.jpg
- │
- ├── 生成 Base64 占位图
- │
- └── 提取主色调
-         │
-         ▼
-      生成 JSON
+                         原始图片
+                            │
+              ┌─────────────┼─────────────┐
+              │             │             │
+              ▼             ▼             ▼
+           Original       Preview       Base64
+          高清原图        JPEG 预览       极小缩略图
+              │             │             │
+              │             │             │
+              ▼             ▼             ▼
+           查看/下载       列表展示       快速占位
 ```
 
-### 原图
+---
 
-原图只在仓库中不存在时下载。
+# 🖼️ Original
 
-这样可以避免重复下载和覆盖历史原图。
+原始图片用于：
 
-### Preview
+- 高清查看
+- 下载
+- 图片详情展示
 
-Preview 用于网页列表展示。
+默认会优先尝试 Bing UHD 图片。
 
-处理策略：
+如果 UHD 下载失败，则回退到 Bing 提供的普通图片地址。
+
+---
+
+# 🖼️ Preview
+
+Preview 用于前端列表展示。
+
+当前处理逻辑优先尝试：
 
 ```text
 1600 × 900
-    ↓
-JPEG Quality 82
-    ↓
-78
-    ↓
-75
-    ↓
-72
-    ↓
-70
-    ↓
-如果仍然较大
-    ↓
-1280 × 720
 ```
 
-目标是尽量将 Preview 控制在约 800 KB 以下。
+并通过调整 JPEG quality 控制文件大小。
 
-### Base64
+目标是尽量将 Preview 控制在：
 
-Base64 只用于极小尺寸的模糊占位：
+```text
+≈ 800 KB
+```
+
+以内。
+
+---
+
+# 🧩 Base64 Thumbnail
+
+每条数据都会保存一个非常小的 Base64 JPEG。
+
+当前生成逻辑会将图片缩放到：
 
 ```text
 16 × 9
 ```
 
-它不是原图，也不是 Preview。
+这个 Base64 图片主要用于：
 
-前端会先显示 Base64，然后在后台加载高清图。
+- 页面快速占位
+- 高清图片加载前的视觉过渡
+- 减少首屏等待感
+
+它不是用于高清展示的。
 
 ---
 
-## 图片主色调
+# 🎨 颜色提取
 
-使用 `node-vibrant` 提取图片颜色。
+项目使用：
 
-生成：
+```text
+node-vibrant
+```
+
+分析图片颜色。
+
+生成的调色板包括：
+
+```text
+Vibrant
+LightVibrant
+DarkVibrant
+
+Muted
+LightMuted
+DarkMuted
+```
+
+最终保存为：
 
 ```json
 {
-  "Vibrant": "#8cbbcc",
-  "DarkVibrant": "#294e5c",
-  "LightVibrant": "#e3f4fb",
-  "Muted": "#7c9c9f",
-  "DarkMuted": "#4e5445",
-  "LightMuted": "#afc8d1"
+  "color": {
+    "Vibrant": "#...",
+    "DarkVibrant": "#...",
+    "LightVibrant": "#...",
+    "Muted": "#...",
+    "DarkMuted": "#...",
+    "LightMuted": "#..."
+  }
 }
 ```
 
-前端可以利用这些颜色制作图片查看器背景氛围。
+这些颜色会被前端用于：
+
+- 🎨 颜色搜索
+- 🖼️ 图片查看器背景
+- 🌈 图片视觉效果
 
 ---
 
-# GitHub Actions
+# ⚙️ 自动更新
 
-项目目前包含两个 Workflow。
-
-## 1. Update Bing Wallpaper
-
-文件：
+每日更新由：
 
 ```text
 .github/workflows/update-bing.yml
 ```
 
-作用：
+负责。
 
-- 自动获取 Bing 壁纸
-- 下载原图
-- 生成 Preview
-- 生成 Base64
-- 提取颜色
-- 更新 JSON
-- 自动提交到 GitHub
+Workflow 支持：
 
-执行时间：
+- 🖱️ 手动执行
+- ⏰ 定时执行
+- 🔄 自动提交更新
+- 🚀 自动推送到 GitHub
 
-```text
-UTC 00:00 → 北京时间 08:00
-UTC 08:00 → 北京时间 16:00
-UTC 15:00 → 北京时间 23:00
-```
+当前定时任务每天执行多次，以尽可能及时获取 Bing 的最新壁纸。
 
-同时支持：
+Workflow 使用：
 
 ```text
-Actions → Update Bing Wallpaper → Run workflow
+Node.js 22
 ```
 
-手动执行。
+并使用：
+
+```text
+Jimp
+node-vibrant
+```
+
+进行图片处理。
 
 ---
 
-## 2. Migrate History Asset URLs
+# 🔁 更新流程
 
-文件：
-
-```text
-.github/workflows/migrate-history.yml
-```
-
-这个 Workflow 专门用于迁移历史数据中的图片 URL。
-
-触发方式：
+一次正常更新大致经过：
 
 ```text
-workflow_dispatch
+GitHub Actions
+      │
+      ▼
+获取 Bing 数据
+      │
+      ▼
+解析图片 URL
+      │
+      ▼
+尝试下载 UHD
+      │
+      ├── 成功 ──► 使用 UHD
+      │
+      └── 失败 ──► 回退普通图片
+      │
+      ▼
+检查历史文件是否存在
+      │
+      ▼
+生成 Preview
+      │
+      ▼
+生成 Base64
+      │
+      ▼
+提取颜色
+      │
+      ▼
+更新 YYYY/MM.json
+      │
+      ▼
+git add
+      │
+      ▼
+git commit
+      │
+      ▼
+git push
 ```
 
-也就是只允许手动执行。
+---
 
-例如原来的 URL：
+# ♻️ 已有数据复用
+
+为了避免重复处理，更新流程会尽量复用已经存在的资源。
+
+例如：
+
+- 原始图片已经存在 → 不重复下载
+- Base64 已存在 → 尽量复用
+- 颜色已经存在 → 尽量复用
+- Preview 已存在 → 尽量复用
+
+这样可以减少 GitHub Actions 的运行时间和网络请求。
+
+---
+
+# 🛠️ 历史数据
+
+仓库不仅用于每日更新，也提供历史数据处理能力。
+
+相关脚本：
 
 ```text
-https://raw.githubusercontent.com/chendada00/bing-data/main/images/2026/09/2026-09-16.jpg
+scripts/backfill-history.js
 ```
 
-迁移后：
+主要用于历史数据的：
+
+- 📚 回填
+- 🖼️ 图片补全
+- 🧩 Preview 生成
+- 🎨 颜色生成
+- 📦 Base64 生成
+- 🔧 数据修复
+- 🔄 数据合并
+
+---
+
+# 🔄 GitHub Actions
+
+项目目前包含多个 Workflow：
 
 ```text
-https://bing-data.伴随.cn/images/2026/09/2026-09-16.jpg
+.github/workflows/
+├── update-bing.yml
+├── backfill-history.yml
+└── migrate-history.yml
 ```
 
-它只修改：
+分别用于不同的数据生命周期任务。
+
+### `update-bing.yml`
+
+负责日常 Bing 壁纸更新。
+
+### `backfill-history.yml`
+
+用于历史数据回填。
+
+### `migrate-history.yml`
+
+用于历史数据迁移、修复等操作。
+
+---
+
+# 🌐 数据访问
+
+生成后的 JSON 可以按照：
 
 ```text
-data/**/*.json
+data/YYYY/MM.json
 ```
 
-不会重新下载图片，也不会修改：
+进行访问。
+
+图片则按照：
+
+```text
+images/YYYY/MM/YYYY-MM-DD.jpg
+```
+
+Preview：
+
+```text
+preview/YYYY/MM/YYYY-MM-DD.jpg
+```
+
+具体访问域名由当前部署配置决定。
+
+---
+
+# 🔗 与 bing-wallpaper 的关系
+
+本仓库与：
+
+[`bing-wallpaper`](https://github.com/chendada00/bing-wallpaper)
+
+属于：
+
+```text
+数据仓库
+   │
+   │ JSON
+   ▼
+前端仓库
+```
+
+即：
+
+### `bing-data`
+
+负责：
+
+> **生产数据**
+
+### `bing-wallpaper`
+
+负责：
+
+> **消费数据 + UI 展示**
+
+前端无需自己：
+
+- 请求 Bing
+- 下载图片
+- 压缩图片
+- 提取颜色
+- 生成缩略图
+
+---
+
+# 🚀 本地运行
+
+如果需要手动执行数据处理脚本：
+
+```bash
+npm install
+```
+
+根据具体脚本配置准备环境变量。
+
+部分处理任务会依赖：
+
+```text
+Node.js
+Jimp
+node-vibrant
+```
+
+---
+
+# ⚠️ 仓库体积
+
+本项目会长期保存 Bing 历史壁纸，因此仓库体积会持续增长。
+
+主要空间来自：
 
 ```text
 images/
 preview/
 ```
 
-同时不会修改：
+其中：
 
 ```text
-sourceImage
+images/
 ```
+
+保存高清原图。
+
+```text
+preview/
+```
+
+保存用于前端展示的压缩图片。
+
+而：
+
+```text
+data/
+```
+
+保存结构化元数据、颜色信息和 Base64 缩略图。
+
+因此：
+
+> 如果只需要使用壁纸数据而不需要图片资源，可以只读取 `data/`。
 
 ---
 
-# 自定义资源域名
+# 📊 数据设计原则
 
-项目通过 `.env` 解耦图片资源地址。
+这个项目的数据设计主要遵循几个原则：
 
-根目录：
+### 1. 📅 按月份拆分
+
+避免一个 JSON 文件无限增长。
+
+### 2. 🖼️ 原图与 Preview 分离
+
+让前端列表无需加载高清图片。
+
+### 3. ⚡ Base64 快速占位
+
+让页面可以快速显示低成本的图片预览。
+
+### 4. 🎨 预计算颜色
+
+避免前端重复进行图片分析。
+
+### 5. ♻️ 尽量复用历史资源
+
+避免重复下载和重复计算。
+
+### 6. 🤖 自动化更新
+
+通过 GitHub Actions 自动维护数据。
+
+---
+
+# 🔐 环境变量
+
+项目使用：
 
 ```text
 .env
 ```
 
-内容：
+保存数据生成和资源地址相关配置。
 
-```env
-ASSET_BASE_URL=https://bing-data.伴随.cn
-```
+尤其是资源部署地址等配置，应根据当前运行环境进行设置。
 
-这个变量用于生成：
-
-```text
-image
-preview
-```
-
-例如：
-
-```text
-ASSET_BASE_URL=https://example.com
-```
-
-最终：
-
-```text
-https://example.com/images/2026/09/2026-09-16.jpg
-```
-
-以及：
-
-```text
-https://example.com/preview/2026/09/2026-09-16.jpg
-```
+不要将真正的敏感信息提交到公开仓库。
 
 ---
 
-# 更换图片域名
+# 📦 相关项目
 
-如果以后将图片迁移到 CDN 或其他服务器：
+🖼️ 前端：
 
-### 1. 修改 `.env`
-
-```env
-ASSET_BASE_URL=https://new-cdn.example.com
-```
-
-### 2. 执行历史迁移
-
-进入：
-
-```text
-GitHub
-→ Actions
-→ Migrate History Asset URLs
-→ Run workflow
-```
-
-### 3. 修改前端仓库
-
-修改：
-
-```text
-bing-wallpaper/.env
-```
-
-将：
-
-```env
-VITE_DATA_BASE_URL=https://bing-data.伴随.cn
-```
-
-修改为新的数据域名。
-
-### 4. 重新部署前端
-
-即可完成整个资源地址迁移。
-
----
-
-# 数据部署
-
-这个仓库本身不要求部署到服务器。
-
-只要图片文件和 JSON 保存在 GitHub，就可以通过：
-
-```text
-GitHub Raw
-```
-
-或者通过：
-
-```text
-CDN / EdgeOne / Cloudflare / Vercel / Nginx
-```
-
-等方式提供访问。
-
-推荐将：
-
-```text
-data/
-images/
-preview/
-```
-
-作为静态资源发布。
-
----
-
-# 与前端项目的关系
-
-对应前端：
-
-**bing-wallpaper**
-
-```text
 https://github.com/chendada00/bing-wallpaper
-```
 
-数据仓库：
+🗃️ 数据：
 
-**bing-data**
-
-```text
 https://github.com/chendada00/bing-data
-```
-
-前端不会参与数据生成。
-
-两者关系：
-
-```text
-              bing-data
-                  │
-        ┌─────────┴─────────┐
-        │                   │
-      JSON               图片资源
-        │                   │
-        └─────────┬─────────┘
-                  │
-                  ▼
-            bing-wallpaper
-                  │
-                  ▼
-               用户浏览
-```
 
 ---
 
-# 技术栈
+# 📄 License
 
-- GitHub Actions
-- Node.js 22
-- Jimp
-- node-vibrant
-- Bing Wallpaper API / 页面数据
-- JSON
-- JPEG
+请以仓库实际 License 文件为准。
 
 ---
 
-# 设计目标
-
-这个仓库主要追求：
-
-- 数据长期保存
-- 原图永久归档
-- 前端快速加载
-- 图片资源与前端解耦
-- 不依赖数据库
-- 不依赖服务器运行环境
-- 自动化更新
-- 历史数据可迁移
-- 资源地址可以随时切换
-
----
-
-# 相关项目
-
-- 前端项目：`chendada00/bing-wallpaper`
-- 数据项目：`chendada00/bing-data`
-
----
-
-## License
-
-本项目代码部分采用 MIT License。
-
-Bing 壁纸图片的版权归原作者及相关版权方所有。本项目主要用于个人学习、展示和壁纸归档。
-
-使用图片时请遵守相关版权和使用规定。
+> 🌅 保存每天的 Bing 风景，也保存时间留下来的痕迹。
