@@ -110,6 +110,7 @@ jobs:
 
           const Jimp = require("jimp");
           const Vibrant = require("node-vibrant");
+          const { getColorHistogram, isValidColorHistogram } = require("./scripts/color-histogram");
 
           const ASSET_BASE_URL = (
             process.env.ASSET_BASE_URL || ""
@@ -1318,6 +1319,39 @@ jobs:
 
             }
 
+            // =====================================================
+            // 12.5. 生成颜色直方图
+            // =====================================================
+
+            let colorHistogram = null;
+
+            if (
+              existing &&
+              isValidColorHistogram(
+                existing.colorHistogram
+              )
+            ) {
+
+              colorHistogram =
+                existing.colorHistogram;
+
+              log(
+                "Using existing color histogram."
+              );
+
+            } else {
+
+              colorHistogram =
+                await getColorHistogram(
+                  imageBuffer
+                );
+
+              log(
+                "Color histogram generated."
+              );
+
+            }
+
 
             // =====================================================
             // 13. 生成 Preview
@@ -1419,7 +1453,8 @@ jobs:
               // 主色
               color:
                 colors,
-
+              // 颜色直方图：108 个 0~255 权重桶
+              colorHistogram,
               width,
 
               height,
