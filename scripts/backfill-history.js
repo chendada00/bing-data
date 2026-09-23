@@ -787,6 +787,7 @@ function createItem({
   base64,
   color,
   width,
+  colorHistogram,
   height
 }) {
   return {
