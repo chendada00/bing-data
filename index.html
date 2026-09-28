@@ -1,0 +1,2074 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <meta
+    name="description"
+    content="Bing 壁纸历史数据仓库，提供每日壁纸、原图、预览图、元数据以及颜色分析数据。"
+  />
+
+  <meta name="theme-color" content="#f5f5f7" />
+
+  <title>Bing 壁纸数据</title>
+
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --surface: rgba(255, 255, 255, 0.78);
+      --surface-solid: #ffffff;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --text-tertiary: #86868b;
+      --border: rgba(0, 0, 0, 0.08);
+      --border-strong: rgba(0, 0, 0, 0.13);
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+      --radius-lg: 28px;
+      --radius-md: 20px;
+      --radius-sm: 14px;
+      --max-width: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      background:
+        radial-gradient(
+          circle at 50% -10%,
+          rgba(255, 255, 255, 0.95),
+          transparent 42%
+        ),
+        var(--bg);
+      color: var(--text);
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "SF Pro Text",
+        "PingFang SC",
+        "Hiragino Sans GB",
+        "Microsoft YaHei",
+        "Helvetica Neue",
+        Arial,
+        sans-serif;
+      line-height: 1.6;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    img {
+      display: block;
+      max-width: 100%;
+    }
+
+    .container {
+      width: min(calc(100% - 40px), var(--max-width));
+      margin: 0 auto;
+    }
+
+    /* =========================
+       顶部导航
+       ========================= */
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(245, 245, 247, 0.78);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .topbar-inner {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      background:
+        linear-gradient(
+          135deg,
+          #111827,
+          #4b5563
+        );
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.25);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav a {
+      padding: 7px 12px;
+      border-radius: 10px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      transition: 0.2s ease;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    /* =========================
+       Hero
+       ========================= */
+
+    .hero {
+      padding: 92px 0 72px;
+      text-align: center;
+    }
+
+    .eyebrow {
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      margin-bottom: 22px;
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: rgba(255,255,255,.82);
+      border: 1px solid var(--border);
+      color: var(--text-secondary);
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    .eyebrow-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: 50%;
+      background: #34c759;
+      box-shadow: 0 0 0 4px rgba(52,199,89,.12);
+    }
+
+    .hero h1 {
+      margin: 0;
+      font-size: clamp(42px, 7vw, 76px);
+      line-height: 1.04;
+      letter-spacing: -0.055em;
+      font-weight: 750;
+    }
+
+    .hero h1 span {
+      display: block;
+      background:
+        linear-gradient(
+          90deg,
+          #111827,
+          #4b5563 45%,
+          #0071e3
+        );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+    }
+
+    .hero-description {
+      max-width: 720px;
+      margin: 26px auto 0;
+      color: var(--text-secondary);
+      font-size: 18px;
+      line-height: 1.8;
+    }
+
+    .hero-actions {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 20px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 600;
+      transition:
+        transform .2s ease,
+        background .2s ease,
+        box-shadow .2s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button-primary {
+      color: #fff;
+      background: var(--accent);
+      box-shadow:
+        0 8px 20px rgba(0, 113, 227, .18);
+    }
+
+    .button-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .button-secondary {
+      color: var(--text);
+      background: rgba(255,255,255,.86);
+      border: 1px solid var(--border-strong);
+    }
+
+    .button-secondary:hover {
+      background: #fff;
+    }
+
+    /* =========================
+       统计
+       ========================= */
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+      margin-bottom: 76px;
+    }
+
+    .stat-card {
+      padding: 28px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      box-shadow: var(--shadow);
+    }
+
+    .stat-label {
+      color: var(--text-tertiary);
+      font-size: 14px;
+      margin-bottom: 7px;
+    }
+
+    .stat-value {
+      font-size: 30px;
+      line-height: 1.2;
+      font-weight: 700;
+      letter-spacing: -0.03em;
+    }
+
+    /* =========================
+       通用 section
+       ========================= */
+
+    .section {
+      margin-bottom: 88px;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: flex-end;
+      justify-content: space-between;
+      gap: 24px;
+      margin-bottom: 26px;
+    }
+
+    .section-title {
+      margin: 0;
+      font-size: 32px;
+      line-height: 1.2;
+      letter-spacing: -0.035em;
+    }
+
+    .section-description {
+      margin: 8px 0 0;
+      max-width: 700px;
+      color: var(--text-secondary);
+      font-size: 15px;
+    }
+
+    .section-link {
+      flex: 0 0 auto;
+      color: var(--accent);
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    .section-link:hover {
+      text-decoration: underline;
+    }
+
+    /* =========================
+       最新壁纸
+       ========================= */
+
+    .wallpaper-grid {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 16px;
+    }
+
+    .wallpaper-card {
+      overflow: hidden;
+      border-radius: var(--radius-md);
+      background: var(--surface-solid);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      transition:
+        transform .25s ease,
+        box-shadow .25s ease;
+    }
+
+    .wallpaper-card:hover {
+      transform: translateY(-4px);
+      box-shadow:
+        0 18px 45px rgba(0, 0, 0, 0.10);
+    }
+
+    .wallpaper-image-wrap {
+      position: relative;
+      aspect-ratio: 16 / 10;
+      overflow: hidden;
+      background: #e8e8ed;
+    }
+
+    .wallpaper-image {
+      width: 100%;
+      height: 100%;
+      object-fit: cover;
+      transition: transform .4s ease;
+    }
+
+    .wallpaper-card:hover .wallpaper-image {
+      transform: scale(1.035);
+    }
+
+    .wallpaper-content {
+      padding: 16px;
+    }
+
+    .wallpaper-date {
+      color: var(--text-tertiary);
+      font-size: 12px;
+      margin-bottom: 5px;
+    }
+
+    .wallpaper-title {
+      margin: 0;
+      font-size: 16px;
+      line-height: 1.45;
+      font-weight: 650;
+      letter-spacing: -0.015em;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .wallpaper-description {
+      margin-top: 7px;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.6;
+      display: -webkit-box;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 2;
+      overflow: hidden;
+    }
+
+    .wallpaper-empty,
+    .loading {
+      grid-column: 1 / -1;
+      padding: 60px 20px;
+      text-align: center;
+      color: var(--text-tertiary);
+      border: 1px dashed var(--border-strong);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,.45);
+    }
+
+    /* =========================
+       数据入口
+       ========================= */
+
+    .resource-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 14px;
+    }
+
+    .resource-card {
+      display: flex;
+      flex-direction: column;
+      min-height: 190px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,.72);
+      transition:
+        transform .2s ease,
+        background .2s ease,
+        border-color .2s ease;
+    }
+
+    .resource-card:hover {
+      transform: translateY(-3px);
+      background: #fff;
+      border-color: var(--border-strong);
+    }
+
+    .resource-icon {
+      width: 42px;
+      height: 42px;
+      display: grid;
+      place-items: center;
+      margin-bottom: 20px;
+      border-radius: 12px;
+      background: #f1f1f3;
+      color: #333336;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    .resource-title {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 650;
+      letter-spacing: -0.02em;
+    }
+
+    .resource-description {
+      margin: 7px 0 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.65;
+    }
+
+    .resource-url {
+      margin-top: auto;
+      padding-top: 18px;
+      color: var(--accent);
+      font-size: 13px;
+      word-break: break-all;
+    }
+
+    /* =========================
+       历史数据
+       ========================= */
+
+    .archive {
+      display: grid;
+      gap: 14px;
+    }
+
+    .year-card {
+      border: 1px solid var(--border);
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,.7);
+      overflow: hidden;
+    }
+
+    .year-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px;
+      padding: 20px 22px;
+    }
+
+    .year-title {
+      margin: 0;
+      font-size: 20px;
+      font-weight: 700;
+    }
+
+    .year-count {
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+
+    .month-list {
+      display: grid;
+      grid-template-columns: repeat(6, 1fr);
+      gap: 8px;
+      padding: 0 22px 22px;
+    }
+
+    .month-link {
+      display: block;
+      padding: 10px 12px;
+      border-radius: 10px;
+      background: #f5f5f7;
+      color: var(--text-secondary);
+      text-align: center;
+      font-size: 13px;
+      transition: .2s ease;
+    }
+
+    .month-link:hover {
+      background: #e9e9ed;
+      color: var(--text);
+    }
+
+    /* =========================
+       数据说明
+       ========================= */
+
+    .info-grid {
+      display: grid;
+      grid-template-columns: repeat(2, 1fr);
+      gap: 16px;
+    }
+
+    .info-card {
+      padding: 28px;
+      border-radius: var(--radius-md);
+      background: rgba(255,255,255,.74);
+      border: 1px solid var(--border);
+    }
+
+    .info-card h3 {
+      margin: 0 0 10px;
+      font-size: 19px;
+      letter-spacing: -0.02em;
+    }
+
+    .info-card p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 14px;
+      line-height: 1.8;
+    }
+
+    .code-box {
+      margin-top: 16px;
+      padding: 15px 17px;
+      overflow-x: auto;
+      border-radius: 12px;
+      background: #1d1d1f;
+      color: #f5f5f7;
+      font-family:
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace;
+      font-size: 12px;
+      line-height: 1.8;
+    }
+
+    .histogram-explain {
+      margin-top: 18px;
+      padding: 18px;
+      border-radius: 14px;
+      background: #f5f5f7;
+    }
+
+    .histogram-explain strong {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 14px;
+    }
+
+    .histogram-explain p {
+      margin: 0;
+      color: var(--text-secondary);
+      font-size: 13px;
+      line-height: 1.7;
+    }
+
+    /* =========================
+       Footer
+       ========================= */
+
+    footer {
+      padding: 40px 0 60px;
+      border-top: 1px solid var(--border);
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    /* =========================
+       响应式
+       ========================= */
+
+    @media (max-width: 960px) {
+      .wallpaper-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .resource-grid {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .month-list {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    @media (max-width: 720px) {
+      .container {
+        width: min(calc(100% - 28px), var(--max-width));
+      }
+
+      .nav {
+        display: none;
+      }
+
+      .hero {
+        padding: 66px 0 54px;
+      }
+
+      .hero-description {
+        font-size: 16px;
+      }
+
+      .stats {
+        grid-template-columns: 1fr;
+        margin-bottom: 58px;
+      }
+
+      .section {
+        margin-bottom: 64px;
+      }
+
+      .section-header {
+        display: block;
+      }
+
+      .section-link {
+        display: inline-block;
+        margin-top: 12px;
+      }
+
+      .wallpaper-grid,
+      .resource-grid,
+      .info-grid {
+        grid-template-columns: 1fr;
+      }
+
+      .month-list {
+        grid-template-columns: repeat(3, 1fr);
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+
+    @media (max-width: 420px) {
+      .month-list {
+        grid-template-columns: repeat(2, 1fr);
+      }
+
+      .hero-actions {
+        flex-direction: column;
+      }
+
+      .button {
+        width: 100%;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================
+       顶部导航
+       ========================= -->
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+
+      <a class="brand" href="/">
+        <span class="brand-mark">B</span>
+        <span>Bing 壁纸数据</span>
+      </a>
+
+      <nav class="nav">
+        <a href="#latest">最新壁纸</a>
+        <a href="#resources">数据资源</a>
+        <a href="#archive">历史数据</a>
+        <a href="#about">数据说明</a>
+      </nav>
+
+    </div>
+  </header>
+
+
+  <main>
+
+    <!-- =========================
+         Hero
+         ========================= -->
+
+    <section class="hero">
+      <div class="container">
+
+        <div class="eyebrow">
+          <span class="eyebrow-dot"></span>
+          Bing Wallpaper Historical Dataset
+        </div>
+
+        <h1>
+          Bing 壁纸数据
+          <span>历史数据仓库</span>
+        </h1>
+
+        <p class="hero-description">
+          收集并保存 Bing 每日壁纸历史数据，包括壁纸元数据、
+          原图、预览图以及颜色分析信息。
+          数据按照年月组织，适合浏览、搜索、分析以及二次开发。
+        </p>
+
+        <div class="hero-actions">
+
+          <a
+            class="button button-primary"
+            href="https://bing.xn--v9x26z.cn/"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            前端预览
+          </a>
+
+          <a
+            class="button button-secondary"
+            href="https://github.com/chendada00/bing-data"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub 仓库
+          </a>
+
+          <a
+            class="button button-secondary"
+            href="/data/index.json"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            查看数据 API
+          </a>
+
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- =========================
+         数据统计
+         ========================= -->
+
+    <section class="container">
+      <div class="stats">
+
+        <div class="stat-card">
+          <div class="stat-label">
+            收录壁纸
+          </div>
+
+          <div
+            class="stat-value"
+            id="wallpaper-count"
+          >
+            —
+          </div>
+        </div>
+
+
+        <div class="stat-card">
+          <div class="stat-label">
+            数据年份
+          </div>
+
+          <div
+            class="stat-value"
+            id="year-count"
+          >
+            —
+          </div>
+        </div>
+
+
+        <div class="stat-card">
+          <div class="stat-label">
+            最新日期
+          </div>
+
+          <div
+            class="stat-value"
+            id="latest-date"
+          >
+            —
+          </div>
+        </div>
+
+      </div>
+    </section>
+
+
+    <!-- =========================
+         最新壁纸
+         ========================= -->
+
+    <section
+      class="container section"
+      id="latest"
+    >
+
+      <div class="section-header">
+
+        <div>
+          <h2 class="section-title">
+            最新壁纸
+          </h2>
+
+          <p class="section-description">
+            从历史索引中自动读取最新收录的壁纸。
+            图片优先使用仓库中的 preview 预览图。
+          </p>
+        </div>
+
+        <a
+          class="section-link"
+          href="https://bing.xn--v9x26z.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          打开完整前端 →
+        </a>
+
+      </div>
+
+
+      <div
+        class="wallpaper-grid"
+        id="wallpaper-grid"
+      >
+        <div class="loading">
+          正在加载壁纸数据……
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- =========================
+         数据资源
+         ========================= -->
+
+    <section
+      class="container section"
+      id="resources"
+    >
+
+      <div class="section-header">
+
+        <div>
+          <h2 class="section-title">
+            数据资源
+          </h2>
+
+          <p class="section-description">
+            常用的数据入口和仓库资源。
+            所有资源均使用当前仓库中的静态文件。
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="resource-grid">
+
+        <a
+          class="resource-card"
+          href="/data/index.json"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <div class="resource-icon">
+            JSON
+          </div>
+
+          <h3 class="resource-title">
+            历史索引
+          </h3>
+
+          <p class="resource-description">
+            保存日期、标题、描述等轻量级历史索引，
+            用于快速搜索全部历史数据。
+          </p>
+
+          <div class="resource-url">
+            /data/index.json
+          </div>
+        </a>
+
+
+        <a
+          class="resource-card"
+          id="latest-month-link"
+          href="/data/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <div class="resource-icon">
+            月
+          </div>
+
+          <h3 class="resource-title">
+            最新月度数据
+          </h3>
+
+          <p class="resource-description">
+            自动定位最新年份和月份的完整 JSON 数据。
+          </p>
+
+          <div
+            class="resource-url"
+            id="latest-month-url"
+          >
+            正在确定……
+          </div>
+        </a>
+
+
+        <a
+          class="resource-card"
+          href="/preview/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <div class="resource-icon">
+            图
+          </div>
+
+          <h3 class="resource-title">
+            壁纸预览图
+          </h3>
+
+          <p class="resource-description">
+            用于前端浏览的图片资源，
+            文件体积通常小于原图。
+          </p>
+
+          <div class="resource-url">
+            /preview/
+          </div>
+        </a>
+
+
+        <a
+          class="resource-card"
+          href="/images/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <div class="resource-icon">
+            原
+          </div>
+
+          <h3 class="resource-title">
+            壁纸原图
+          </h3>
+
+          <p class="resource-description">
+            保存完整尺寸的壁纸原始图片。
+          </p>
+
+          <div class="resource-url">
+            /images/
+          </div>
+        </a>
+
+
+        <a
+          class="resource-card"
+          href="/data/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <div class="resource-icon">
+            数
+          </div>
+
+          <h3 class="resource-title">
+            月度数据目录
+          </h3>
+
+          <p class="resource-description">
+            数据按照年份和月份组织，
+            例如 2026 年 9 月的数据。
+          </p>
+
+          <div class="resource-url">
+            /data/YYYY/MM.json
+          </div>
+        </a>
+
+
+        <a
+          class="resource-card"
+          href="https://github.com/chendada00/bing-data"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          <div class="resource-icon">
+            GH
+          </div>
+
+          <h3 class="resource-title">
+            GitHub 源码
+          </h3>
+
+          <p class="resource-description">
+            查看数据生成脚本、GitHub Actions、
+            项目文档以及完整仓库内容。
+          </p>
+
+          <div class="resource-url">
+            github.com/chendada00/bing-data
+          </div>
+        </a>
+
+      </div>
+
+    </section>
+
+
+    <!-- =========================
+         历史数据
+         ========================= -->
+
+    <section
+      class="container section"
+      id="archive"
+    >
+
+      <div class="section-header">
+
+        <div>
+          <h2 class="section-title">
+            历史数据
+          </h2>
+
+          <p class="section-description">
+            根据历史索引自动生成年份和月份目录。
+            点击月份即可直接打开对应的 JSON 数据。
+          </p>
+        </div>
+
+      </div>
+
+
+      <div
+        class="archive"
+        id="archive-list"
+      >
+        <div class="loading">
+          正在生成历史数据目录……
+        </div>
+      </div>
+
+    </section>
+
+
+    <!-- =========================
+         数据说明
+         ========================= -->
+
+    <section
+      class="container section"
+      id="about"
+    >
+
+      <div class="section-header">
+
+        <div>
+          <h2 class="section-title">
+            数据说明
+          </h2>
+
+          <p class="section-description">
+            这个仓库不仅保存图片，同时保存壁纸的结构化数据和颜色分析结果。
+          </p>
+        </div>
+
+      </div>
+
+
+      <div class="info-grid">
+
+        <!-- 月度 JSON -->
+
+        <article class="info-card">
+
+          <h3>
+            月度 JSON
+          </h3>
+
+          <p>
+            完整壁纸数据按照年份和月份保存。
+            每个月对应一个 JSON 文件，例如：
+          </p>
+
+          <div class="code-box">
+            /data/2026/09.json
+          </div>
+
+          <p style="margin-top:16px;">
+            月度数据包含日期、标题、描述、版权信息、
+            图片地址、预览图以及颜色分析数据。
+          </p>
+
+        </article>
+
+
+        <!-- 历史索引 -->
+
+        <article class="info-card">
+
+          <h3>
+            历史索引
+          </h3>
+
+          <p>
+            <code>data/index.json</code>
+            是轻量级历史搜索索引。
+            它主要保存日期、标题和描述，
+            用来避免搜索历史数据时一次性加载所有月度 JSON。
+          </p>
+
+          <div class="code-box">
+            /data/index.json
+          </div>
+
+        </article>
+
+
+        <!-- 图片 -->
+
+        <article class="info-card">
+
+          <h3>
+            图片资源
+          </h3>
+
+          <p>
+            图片和 JSON 数据分开保存。
+            前端通常优先使用 preview，
+            进入详情页后再根据需要加载原图。
+          </p>
+
+          <div class="code-box">
+            /preview/YYYY/MM/YYYY-MM-DD.jpg
+            <br />
+            /images/YYYY/MM/YYYY-MM-DD.jpg
+          </div>
+
+        </article>
+
+
+        <!-- Color -->
+
+        <article class="info-card">
+
+          <h3>
+            颜色数据
+          </h3>
+
+          <p>
+            每张图片会保存主要颜色信息，
+            可以用于页面主色展示、颜色筛选以及后续颜色相关功能。
+          </p>
+
+          <div class="code-box">
+            color
+            <br />
+            colorHistogram
+          </div>
+
+        </article>
+
+
+        <!-- Histogram -->
+
+        <article
+          class="info-card"
+          style="grid-column: 1 / -1;"
+        >
+
+          <h3>
+            Color Histogram：颜色直方图
+          </h3>
+
+          <p>
+            当前项目的
+            <code>colorHistogram</code>
+            使用 HSV 颜色空间进行统计。
+            当前版本将色相、饱和度、明度划分为：
+          </p>
+
+          <div class="code-box">
+            Hue：12 个区间
+            <br />
+            Saturation：3 个区间
+            <br />
+            Value：3 个区间
+            <br /><br />
+            12 × 3 × 3 = 108 个颜色区域
+          </div>
+
+
+          <div class="histogram-explain">
+
+            <strong>
+              注意：颜色直方图不是图片地图
+            </strong>
+
+            <p>
+              直方图中的每一个 bin 表示一类 HSV 颜色区域中包含的像素数量。
+              它描述的是整张图片的颜色组成，而不是像素在图片中的空间位置。
+            </p>
+
+            <p style="margin-top:10px;">
+              因此，如果详情页以后展示一个由 12 × 3 × 3
+              组成的大方格，左上角并不对应原图片的左上角。
+              它代表的是某一个特定的 HSV 颜色区间。
+            </p>
+
+            <p style="margin-top:10px;">
+              鼠标悬停在颜色区域上时，可以进一步显示：
+              色相区间、饱和度区间、明度区间、像素数量以及占整张图片的比例。
+            </p>
+
+          </div>
+
+        </article>
+
+
+        <!-- 前端预览 -->
+
+        <article class="info-card">
+
+          <h3>
+            前端预览
+          </h3>
+
+          <p>
+            数据仓库本身负责保存数据和图片，
+            实际的壁纸浏览、搜索以及数据可视化由独立前端项目提供。
+          </p>
+
+          <div class="code-box">
+            https://bing.伴随.cn/
+          </div>
+
+          <p style="margin-top:16px;">
+            可以直接打开前端预览页面查看实际展示效果。
+          </p>
+
+        </article>
+
+
+        <!-- 数据更新 -->
+
+        <article class="info-card">
+
+          <h3>
+            数据更新流程
+          </h3>
+
+          <p>
+            数据通过自动化脚本获取 Bing 每日壁纸，
+            生成预览图和颜色分析，然后更新月度 JSON
+            以及历史索引。
+          </p>
+
+          <div class="code-box">
+            Bing
+            ↓
+            获取壁纸
+            ↓
+            保存原图
+            ↓
+            生成 Preview
+            ↓
+            颜色分析
+            ↓
+            更新月度 JSON
+            ↓
+            更新 index.json
+          </div>
+
+        </article>
+
+      </div>
+
+    </section>
+
+  </main>
+
+
+  <!-- =========================
+       Footer
+       ========================= -->
+
+  <footer>
+
+    <div class="container footer-inner">
+
+      <div>
+        Bing 壁纸数据 · 静态数据仓库
+      </div>
+
+      <div class="footer-links">
+
+        <a
+          href="https://bing.伴随.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          前端预览
+        </a>
+
+        <a
+          href="/data/index.json"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          数据 API
+        </a>
+
+        <a
+          href="https://github.com/chendada00/bing-data"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub
+        </a>
+
+      </div>
+
+    </div>
+
+  </footer>
+
+
+  <script>
+    /**
+     * ==========================================
+     * Bing 壁纸数据首页
+     * ==========================================
+     *
+     * 数据结构：
+     *
+     * /data/index.json
+     *
+     * [
+     *   [
+     *     "2026-09-23",
+     *     "标题",
+     *     "描述"
+     *   ]
+     * ]
+     *
+     *
+     * 月度数据：
+     *
+     * /data/2026/09.json
+     *
+     * {
+     *   "year": 2026,
+     *   "month": 9,
+     *   "items": [
+     *     {
+     *       "date": "2026-09-23",
+     *       "title": "...",
+     *       "description": "...",
+     *       ...
+     *     }
+     *   ]
+     * }
+     *
+     * ==========================================
+     */
+
+    const INDEX_URL = "/data/index.json";
+
+    const FRONTEND_URL =
+      "https://bing.xn--v9x26z.cn/";
+
+    const GITHUB_URL =
+      "https://github.com/chendada00/bing-data";
+
+
+    /**
+     * HTML 转义
+     *
+     * 防止 JSON 中的标题或描述包含 HTML
+     * 时直接插入页面。
+     */
+    function escapeHtml(value) {
+      if (value === null || value === undefined) {
+        return "";
+      }
+
+      return String(value)
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
+    }
+
+
+    /**
+     * 格式化日期
+     */
+    function formatDate(dateString) {
+      if (!dateString) {
+        return "—";
+      }
+
+      const date = new Date(
+        `${dateString}T00:00:00`
+      );
+
+      if (Number.isNaN(date.getTime())) {
+        return dateString;
+      }
+
+      return new Intl.DateTimeFormat(
+        "zh-CN",
+        {
+          year: "numeric",
+          month: "long",
+          day: "numeric"
+        }
+      ).format(date);
+    }
+
+
+    /**
+     * 判断是否是有效日期
+     */
+    function isValidDateString(value) {
+      return /^\d{4}-\d{2}-\d{2}$/.test(
+        String(value || "")
+      );
+    }
+
+
+    /**
+     * 将 index.json 统一转换为：
+     *
+     * {
+     *   date,
+     *   title,
+     *   description
+     * }
+     *
+     * 同时兼容：
+     *
+     * [
+     *   ["date", "title", "description"]
+     * ]
+     *
+     * 以及：
+     *
+     * [
+     *   {
+     *     date,
+     *     title,
+     *     description
+     *   }
+     * ]
+     */
+    function normalizeIndexItem(item) {
+
+      if (Array.isArray(item)) {
+        return {
+          date: item[0] || "",
+          title: item[1] || "",
+          description: item[2] || ""
+        };
+      }
+
+      if (
+        item &&
+        typeof item === "object"
+      ) {
+        return {
+          date: item.date || "",
+          title: item.title || "",
+          description: item.description || ""
+        };
+      }
+
+      return null;
+    }
+
+
+    /**
+     * 获取 index.json
+     */
+    async function loadIndex() {
+
+      const response = await fetch(
+        INDEX_URL,
+        {
+          cache: "no-cache"
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error(
+          `无法读取 ${INDEX_URL}：HTTP ${response.status}`
+        );
+      }
+
+      const data =
+        await response.json();
+
+      /*
+       * 当前仓库文档描述的结构：
+       *
+       * [
+       *   ["date", "title", "description"]
+       * ]
+       *
+       * 同时兼容未来可能出现的：
+       *
+       * {
+       *   "items": [...]
+       * }
+       */
+
+      const rawItems =
+        Array.isArray(data)
+          ? data
+          : Array.isArray(data?.items)
+            ? data.items
+            : [];
+
+      return rawItems
+        .map(normalizeIndexItem)
+        .filter(
+          item =>
+            item &&
+            isValidDateString(item.date)
+        );
+    }
+
+
+    /**
+     * 按日期倒序排列
+     */
+    function sortLatest(items) {
+
+      return [...items].sort(
+        (a, b) =>
+          String(b.date)
+            .localeCompare(
+              String(a.date)
+            )
+      );
+    }
+
+
+    /**
+     * 获取日期对应的图片路径
+     *
+     * 仓库采用：
+     *
+     * /preview/YYYY/MM/YYYY-MM-DD.jpg
+     *
+     * /images/YYYY/MM/YYYY-MM-DD.jpg
+     */
+    function getPreviewUrl(date) {
+
+      const parts =
+        String(date).split("-");
+
+      if (parts.length !== 3) {
+        return "";
+      }
+
+      const year = parts[0];
+      const month = parts[1];
+
+      return `/preview/${year}/${month}/${date}.jpg`;
+    }
+
+
+    function getImageUrl(date) {
+
+      const parts =
+        String(date).split("-");
+
+      if (parts.length !== 3) {
+        return "";
+      }
+
+      const year = parts[0];
+      const month = parts[1];
+
+      return `/images/${year}/${month}/${date}.jpg`;
+    }
+
+
+    /**
+     * 渲染统计数据
+     */
+    function renderStats(items) {
+
+      const countElement =
+        document.getElementById(
+          "wallpaper-count"
+        );
+
+      const yearElement =
+        document.getElementById(
+          "year-count"
+        );
+
+      const latestElement =
+        document.getElementById(
+          "latest-date"
+        );
+
+
+      const dates = items
+        .map(item => item.date)
+        .filter(isValidDateString);
+
+
+      const years =
+        new Set(
+          dates.map(
+            date => date.substring(0, 4)
+          )
+        );
+
+
+      const latest =
+        sortLatest(
+          items
+        )[0];
+
+
+      countElement.textContent =
+        items.length.toLocaleString(
+          "zh-CN"
+        );
+
+
+      yearElement.textContent =
+        `${years.size} 年`;
+
+
+      latestElement.textContent =
+        latest
+          ? latest.date
+          : "—";
+    }
+
+
+    /**
+     * 创建壁纸卡片
+     */
+    function createWallpaperCard(item) {
+
+      const date =
+        item.date;
+
+      const previewUrl =
+        getPreviewUrl(date);
+
+      const imageUrl =
+        getImageUrl(date);
+
+      const title =
+        item.title ||
+        "未命名壁纸";
+
+      const description =
+        item.description ||
+        "暂无描述";
+
+
+      return `
+        <a
+          class="wallpaper-card"
+          href="${escapeHtml(imageUrl)}"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="查看原图"
+        >
+
+          <div class="wallpaper-image-wrap">
+
+            <img
+              class="wallpaper-image"
+              src="${escapeHtml(previewUrl)}"
+              alt="${escapeHtml(title)}"
+              loading="lazy"
+              onerror="this.onerror=null;this.src='${escapeHtml(imageUrl)}';"
+            />
+
+          </div>
+
+          <div class="wallpaper-content">
+
+            <div class="wallpaper-date">
+              ${escapeHtml(
+                formatDate(date)
+              )}
+            </div>
+
+            <h3 class="wallpaper-title">
+              ${escapeHtml(title)}
+            </h3>
+
+            <div class="wallpaper-description">
+              ${escapeHtml(description)}
+            </div>
+
+          </div>
+
+        </a>
+      `;
+    }
+
+
+    /**
+     * 渲染最新壁纸
+     */
+    function renderLatest(items) {
+
+      const container =
+        document.getElementById(
+          "wallpaper-grid"
+        );
+
+
+      const latest =
+        sortLatest(items)
+          .slice(0, 8);
+
+
+      if (!latest.length) {
+
+        container.innerHTML = `
+          <div class="wallpaper-empty">
+            暂时没有找到壁纸数据。
+          </div>
+        `;
+
+        return;
+      }
+
+
+      container.innerHTML =
+        latest
+          .map(createWallpaperCard)
+          .join("");
+    }
+
+
+    /**
+     * 生成历史目录
+     */
+    function renderArchive(items) {
+
+      const container =
+        document.getElementById(
+          "archive-list"
+        );
+
+
+      const yearMap =
+        new Map();
+
+
+      for (const item of items) {
+
+        if (!isValidDateString(item.date)) {
+          continue;
+        }
+
+
+        const year =
+          item.date.substring(0, 4);
+
+        const month =
+          item.date.substring(5, 7);
+
+
+        if (!yearMap.has(year)) {
+          yearMap.set(
+            year,
+            new Set()
+          );
+        }
+
+
+        yearMap
+          .get(year)
+          .add(month);
+      }
+
+
+      const years =
+        [...yearMap.keys()]
+          .sort()
+          .reverse();
+
+
+      if (!years.length) {
+
+        container.innerHTML = `
+          <div class="loading">
+            暂时没有历史数据。
+          </div>
+        `;
+
+        return;
+      }
+
+
+      container.innerHTML =
+        years
+          .map(year => {
+
+            const months =
+              [...yearMap.get(year)]
+                .sort()
+                .reverse();
+
+
+            return `
+              <div class="year-card">
+
+                <div class="year-header">
+
+                  <h3 class="year-title">
+                    ${year}
+                  </h3>
+
+                  <span class="year-count">
+                    ${months.length} 个月
+                  </span>
+
+                </div>
+
+
+                <div class="month-list">
+
+                  ${months
+                    .map(month => {
+
+                      const url =
+                        `/data/${year}/${month}.json`;
+
+                      return `
+                        <a
+                          class="month-link"
+                          href="${url}"
+                          target="_blank"
+                          rel="noopener noreferrer"
+                        >
+                          ${year} 年 ${Number(month)} 月
+                        </a>
+                      `;
+
+                    })
+                    .join("")}
+
+                </div>
+
+              </div>
+            `;
+
+          })
+          .join("");
+    }
+
+
+    /**
+     * 设置最新月份数据入口
+     */
+    function renderLatestMonth(items) {
+
+      const latest =
+        sortLatest(items)[0];
+
+
+      const link =
+        document.getElementById(
+          "latest-month-link"
+        );
+
+      const text =
+        document.getElementById(
+          "latest-month-url"
+        );
+
+
+      if (!latest) {
+        return;
+      }
+
+
+      const year =
+        latest.date.substring(0, 4);
+
+      const month =
+        latest.date.substring(5, 7);
+
+
+      const url =
+        `/data/${year}/${month}.json`;
+
+
+      link.href = url;
+
+      text.textContent = url;
+    }
+
+
+    /**
+     * 主程序
+     */
+    async function init() {
+
+      try {
+
+        const items =
+          await loadIndex();
+
+
+        renderStats(items);
+
+        renderLatest(items);
+
+        renderArchive(items);
+
+        renderLatestMonth(items);
+
+      } catch (error) {
+
+        console.error(
+          "Bing 壁纸数据加载失败：",
+          error
+        );
+
+
+        document.getElementById(
+          "wallpaper-grid"
+        ).innerHTML = `
+          <div class="wallpaper-empty">
+            壁纸数据加载失败，请稍后重试。
+          </div>
+        `;
+
+
+        document.getElementById(
+          "archive-list"
+        ).innerHTML = `
+          <div class="wallpaper-empty">
+            历史数据目录加载失败。
+          </div>
+        `;
+
+
+        document.getElementById(
+          "wallpaper-count"
+        ).textContent = "—";
+
+
+        document.getElementById(
+          "year-count"
+        ).textContent = "—";
+
+
+        document.getElementById(
+          "latest-date"
+        ).textContent = "—";
+      }
+    }
+
+
+    /**
+     * 启动
+     */
+    init();
+
+  </script>
+
+</body>
+</html>
