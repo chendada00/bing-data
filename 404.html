@@ -1,0 +1,516 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta
+    name="viewport"
+    content="width=device-width, initial-scale=1.0"
+  />
+
+  <meta
+    name="description"
+    content="页面不存在 —— Bing 壁纸数据仓库"
+  />
+
+  <meta name="theme-color" content="#f5f5f7" />
+  <link rel="icon" type="image/svg+xml" href="/favicon.svg">
+  <title>404 · 页面不存在 · Bing 壁纸数据</title>
+
+  <style>
+    :root {
+      --bg: #f5f5f7;
+      --surface: rgba(255, 255, 255, 0.78);
+      --surface-solid: #ffffff;
+      --text: #1d1d1f;
+      --text-secondary: #6e6e73;
+      --text-tertiary: #86868b;
+      --border: rgba(0, 0, 0, 0.08);
+      --border-strong: rgba(0, 0, 0, 0.13);
+      --accent: #0071e3;
+      --accent-hover: #0077ed;
+      --shadow: 0 12px 40px rgba(0, 0, 0, 0.06);
+      --radius-lg: 28px;
+      --radius-md: 20px;
+      --radius-sm: 14px;
+      --max-width: 1180px;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    html {
+      scroll-behavior: smooth;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background:
+        radial-gradient(
+          circle at 50% -10%,
+          rgba(255, 255, 255, 0.95),
+          transparent 42%
+        ),
+        var(--bg);
+      color: var(--text);
+      font-family:
+        -apple-system,
+        BlinkMacSystemFont,
+        "SF Pro Display",
+        "SF Pro Text",
+        "PingFang SC",
+        "Hiragino Sans GB",
+        "Microsoft YaHei",
+        "Helvetica Neue",
+        Arial,
+        sans-serif;
+      line-height: 1.6;
+    }
+
+    a {
+      color: inherit;
+      text-decoration: none;
+    }
+
+    button {
+      font: inherit;
+    }
+
+    .container {
+      width: min(calc(100% - 40px), var(--max-width));
+      margin: 0 auto;
+    }
+
+    /* =========================
+       顶部导航
+       ========================= */
+
+    .topbar {
+      position: sticky;
+      top: 0;
+      z-index: 100;
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      background: rgba(245, 245, 247, 0.78);
+      border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+    }
+
+    .topbar-inner {
+      min-height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 24px;
+    }
+
+    .brand {
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 16px;
+      font-weight: 650;
+      letter-spacing: -0.01em;
+    }
+
+    .brand-mark {
+      width: 30px;
+      height: 30px;
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      color: white;
+      font-size: 15px;
+      font-weight: 700;
+      background:
+        linear-gradient(
+          135deg,
+          #111827,
+          #4b5563
+        );
+      box-shadow:
+        inset 0 1px 0 rgba(255,255,255,.25);
+    }
+
+    .nav {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .nav a {
+      padding: 7px 12px;
+      border-radius: 10px;
+      color: var(--text-secondary);
+      font-size: 14px;
+      transition: 0.2s ease;
+    }
+
+    .nav a:hover {
+      color: var(--text);
+      background: rgba(0, 0, 0, 0.05);
+    }
+
+    /* =========================
+       404 主体
+       ========================= */
+
+    .error-main {
+      flex: 1;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 80px 0 100px;
+    }
+
+    .error-card {
+      width: 100%;
+      max-width: 720px;
+      padding: 56px 48px;
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      backdrop-filter: blur(18px);
+      -webkit-backdrop-filter: blur(18px);
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow);
+      text-align: center;
+    }
+
+    .error-code {
+      font-size: clamp(80px, 16vw, 140px);
+      line-height: 1;
+      font-weight: 750;
+      letter-spacing: -0.06em;
+      background:
+        linear-gradient(
+          90deg,
+          #111827,
+          #4b5563 45%,
+          #0071e3
+        );
+      -webkit-background-clip: text;
+      background-clip: text;
+      color: transparent;
+      margin-bottom: 8px;
+    }
+
+    .error-title {
+      margin: 0;
+      font-size: clamp(24px, 4vw, 34px);
+      line-height: 1.2;
+      letter-spacing: -0.035em;
+      font-weight: 700;
+    }
+
+    .error-description {
+      max-width: 520px;
+      margin: 18px auto 0;
+      color: var(--text-secondary);
+      font-size: 16px;
+      line-height: 1.8;
+    }
+
+    .error-path {
+      display: inline-block;
+      margin-top: 20px;
+      padding: 8px 14px;
+      border-radius: 999px;
+      background: rgba(0, 0, 0, 0.04);
+      border: 1px solid var(--border);
+      color: var(--text-tertiary);
+      font-family:
+        ui-monospace,
+        SFMono-Regular,
+        Menlo,
+        Monaco,
+        Consolas,
+        monospace;
+      font-size: 12.5px;
+      max-width: 100%;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+      vertical-align: bottom;
+    }
+
+    .error-actions {
+      display: flex;
+      justify-content: center;
+      flex-wrap: wrap;
+      gap: 12px;
+      margin-top: 34px;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 46px;
+      padding: 0 22px;
+      border-radius: 999px;
+      font-size: 15px;
+      font-weight: 600;
+      transition:
+        transform .2s ease,
+        background .2s ease,
+        box-shadow .2s ease;
+    }
+
+    .button:hover {
+      transform: translateY(-1px);
+    }
+
+    .button-primary {
+      color: #fff;
+      background: var(--accent);
+      box-shadow:
+        0 8px 20px rgba(0, 113, 227, .18);
+    }
+
+    .button-primary:hover {
+      background: var(--accent-hover);
+    }
+
+    .button-secondary {
+      color: var(--text);
+      background: rgba(255,255,255,.86);
+      border: 1px solid var(--border-strong);
+    }
+
+    .button-secondary:hover {
+      background: #fff;
+    }
+
+    .error-hint {
+      margin-top: 30px;
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+
+    /* =========================
+       Footer
+       ========================= */
+
+    footer {
+      padding: 40px 0 60px;
+      border-top: 1px solid var(--border);
+      color: var(--text-tertiary);
+      font-size: 13px;
+    }
+
+    .footer-inner {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      gap: 20px;
+    }
+
+    .footer-links {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+    }
+
+    .footer-links a:hover {
+      color: var(--text);
+    }
+
+    /* =========================
+       响应式
+       ========================= */
+
+    @media (max-width: 720px) {
+      .container {
+        width: min(calc(100% - 28px), var(--max-width));
+      }
+
+      .nav {
+        display: none;
+      }
+
+      .error-main {
+        padding: 56px 0 72px;
+      }
+
+      .error-card {
+        padding: 40px 24px;
+        border-radius: var(--radius-md);
+      }
+
+      .error-actions {
+        flex-direction: column;
+      }
+
+      .button {
+        width: 100%;
+      }
+
+      .footer-inner {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- =========================
+       顶部导航
+       ========================= -->
+
+  <header class="topbar">
+    <div class="container topbar-inner">
+
+      <a class="brand" href="/">
+        <span class="brand-mark">B</span>
+        <span>Bing 壁纸数据</span>
+      </a>
+
+      <nav class="nav">
+        <a href="/#latest">最新壁纸</a>
+        <a href="/#resources">数据资源</a>
+        <a href="/#archive">历史数据</a>
+        <a href="/#about">数据说明</a>
+      </nav>
+
+    </div>
+  </header>
+
+
+  <!-- =========================
+       404 主体
+       ========================= -->
+
+  <main class="error-main">
+    <div class="container">
+
+      <div class="error-card">
+
+        <div class="error-code">404</div>
+
+        <h1 class="error-title">
+          页面不存在
+        </h1>
+
+        <p class="error-description">
+          你访问的路径没有对应的文件。
+          可能是链接已失效、地址拼写有误，
+          或者这个资源尚未被收录到仓库中。
+        </p>
+
+        <div class="error-path" id="error-path">
+          /
+        </div>
+
+        <div class="error-actions">
+
+          <a
+            class="button button-primary"
+            href="/"
+          >
+            返回首页
+          </a>
+
+          <a
+            class="button button-secondary"
+            href="/data/index.json"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            查看数据索引
+          </a>
+
+          <a
+            class="button button-secondary"
+            href="https://github.com/chendada00/bing-data"
+            target="_blank"
+            rel="noopener noreferrer"
+          >
+            GitHub 仓库
+          </a>
+
+        </div>
+
+        <p class="error-hint">
+          可以返回首页浏览最新壁纸，或通过数据索引查找历史数据。
+        </p>
+
+      </div>
+
+    </div>
+  </main>
+
+
+  <!-- =========================
+       Footer
+       ========================= -->
+
+  <footer>
+
+    <div class="container footer-inner">
+
+      <div>
+        Bing 壁纸数据 · 静态数据仓库
+      </div>
+
+      <div class="footer-links">
+
+        <a
+          href="https://bing.伴随.cn/"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          前端预览
+        </a>
+
+        <a
+          href="/data/index.json"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          数据 API
+        </a>
+
+        <a
+          href="https://github.com/chendada00/bing-data"
+          target="_blank"
+          rel="noopener noreferrer"
+        >
+          GitHub
+        </a>
+
+      </div>
+
+    </div>
+
+  </footer>
+
+
+  <script>
+    /**
+     * 在 404 页面展示当前访问的路径。
+     * 只是辅助信息，不参与路由逻辑。
+     */
+    (function () {
+      var el = document.getElementById("error-path");
+      if (!el) return;
+
+      var path = window.location.pathname || "/";
+      var search = window.location.search || "";
+      var display = path + search;
+
+      // 避免过长路径撑破布局
+      if (display.length > 80) {
+        display = display.slice(0, 77) + "...";
+      }
+
+      el.textContent = display;
+      el.title = path + search;
+    })();
+  </script>
+
+</body>
+</html>
