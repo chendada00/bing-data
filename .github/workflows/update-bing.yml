@@ -5,7 +5,6 @@ on:
   schedule:
     - cron: "0 16 * * *" # 北京时间 00:00 (UTC 16:00)
     - cron: "0 0 * * *"
-    - cron: "0 21 * * *" # 北京时间 05:00 (UTC 21:00)
 
 permissions:
   contents: write
