@@ -43,6 +43,16 @@ const MAX_IMAGES = Number(
   process.env.MAX_IMAGES || 0
 )
 
+const START_DATE =
+  normalizeDate(
+    process.env.START_DATE || ''
+  )
+
+const END_DATE =
+  normalizeDate(
+    process.env.END_DATE || ''
+  )
+
 const FORCE_UHD =
   String(
     process.env.FORCE_UHD || 'false'
@@ -63,6 +73,30 @@ const COLOR_KEYS = [
   'DarkMuted',
   'LightMuted'
 ]
+
+function isDateInRange(date) {
+  const normalized = normalizeDate(date)
+
+  if (!normalized) {
+    return false
+  }
+
+  if (
+    START_DATE &&
+    normalized < START_DATE
+  ) {
+    return false
+  }
+
+  if (
+    END_DATE &&
+    normalized > END_DATE
+  ) {
+    return false
+  }
+
+  return true
+}
 
 function log(message) {
   console.log(
@@ -2035,6 +2069,26 @@ async function runRepair(
   local,
   sources
 ) {
+
+  log(
+    `Repair range: ${
+      START_DATE || 'beginning'
+    } -> ${
+      END_DATE || 'end'
+    }`
+  )
+
+  log(
+    `MAX_IMAGES: ${
+      MAX_IMAGES > 0
+        ? MAX_IMAGES
+        : 'unlimited'
+    }`
+  )
+
+  log(
+    `FORCE_UHD: ${FORCE_UHD}`
+  )
   const sourceMap =
     new Map()
 
@@ -2058,12 +2112,50 @@ async function runRepair(
   const entries =
     Array.from(
       sourceMap.entries()
-    ).sort(
-      (a, b) =>
-        a[0].localeCompare(
-          b[0]
-        )
     )
+      .filter(([date]) =>
+        isDateInRange(date)
+      )
+      .sort(
+        (a, b) =>
+          a[0].localeCompare(
+            b[0]
+          )
+      )
+
+  if (
+    START_DATE &&
+    END_DATE &&
+    START_DATE > END_DATE
+  ) {
+    fail(
+      `START_DATE cannot be later than END_DATE: ${START_DATE} > ${END_DATE}`
+    )
+  }
+
+
+
+
+if (
+  START_DATE &&
+  YEAR !== 'all' &&
+  !START_DATE.startsWith(`${YEAR}-`)
+) {
+  fail(
+    `START_DATE ${START_DATE} does not belong to YEAR=${YEAR}`
+  )
+}
+
+if (
+  END_DATE &&
+  YEAR !== 'all' &&
+  !END_DATE.startsWith(`${YEAR}-`)
+) {
+  fail(
+    `END_DATE ${END_DATE} does not belong to YEAR=${YEAR}`
+  )
+}
+
 
   for (
     const [date, source] of entries
