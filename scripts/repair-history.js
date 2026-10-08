@@ -142,10 +142,18 @@ function buildImageUrl(date) {
 }
 
 function buildUhdFile(date) {
+  const parsed = parseDate(date)
+
+  if (!parsed) {
+    throw new Error(`Invalid date: ${date}`)
+  }
+
   return path.join(
     UHD_ROOT,
     'images',
-    buildRelativePath('images', date)
+    parsed.year,
+    parsed.month,
+    `${parsed.date}.jpg`
   )
 }
 
