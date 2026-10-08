@@ -57,12 +57,18 @@ jobs:
           source .env
           set +a
 
-          if [ -z "$ASSET_BASE_URL" ]; then
-            echo "::error::ASSET_BASE_URL is not configured"
+          if [ -z "$PREVIEW_BASE_URL" ]; then
+            echo "::error::PREVIEW_BASE_URL is not configured"
             exit 1
           fi
 
-          echo "ASSET_BASE_URL=$ASSET_BASE_URL" >> "$GITHUB_ENV"
+          if [ -z "$IMAGE_BASE_URL" ]; then
+            echo "::error::IMAGE_BASE_URL is not configured"
+            exit 1
+          fi
+
+          echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL" >> "$GITHUB_ENV"
+          echo "IMAGE_BASE_URL=$IMAGE_BASE_URL" >> "$GITHUB_ENV"
 
       # =========================================================
       # 4. Setup Node.js
@@ -119,7 +125,7 @@ jobs:
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/ images/ preview/
+          git add data/ preview/
 
           if git diff --cached --quiet; then
             echo "No bing-data changes to commit."

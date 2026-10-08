@@ -1,9 +1,6 @@
 /*
   Access-Control-Allow-Origin: *
 
-/images/*
-  Cache-Control: public, max-age=2592000, immutable
-  Access-Control-Expose-Headers: Content-Length, ETag
 
 /preview/*
   Cache-Control: public, max-age=2592000, immutable

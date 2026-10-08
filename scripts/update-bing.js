@@ -11,7 +11,25 @@ const {
 } = require('./color-histogram')
 const { buildIndex } = require('./index')
 
-const ASSET_BASE_URL = (process.env.ASSET_BASE_URL || '').replace(/\/$/, '')
+const PREVIEW_BASE_URL =
+  (process.env.PREVIEW_BASE_URL || '')
+    .replace(/\/$/, '')
+
+const IMAGE_BASE_URL =
+  (process.env.IMAGE_BASE_URL || '')
+    .replace(/\/$/, '')
+
+if (!PREVIEW_BASE_URL) {
+  throw new Error(
+    'PREVIEW_BASE_URL is not configured'
+  )
+}
+
+if (!IMAGE_BASE_URL) {
+  throw new Error(
+    'IMAGE_BASE_URL is not configured'
+  )
+}
 
 if (!ASSET_BASE_URL) {
   throw new Error('ASSET_BASE_URL is not configured')
@@ -27,9 +45,26 @@ function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
 }
 
-function buildAssetUrl(filePath) {
-  return `${ASSET_BASE_URL}/${filePath.replace(/\\/g, '/').replace(/^\/+/, '')}`
+function buildAssetUrl(
+  baseUrl,
+  filePath
+) {
+  return `${baseUrl}/${filePath
+    .replace(/\\/g, '/')
+    .replace(/^\/+/, '')}`
 }
+
+const imageUrl =
+  buildAssetUrl(
+    IMAGE_BASE_URL,
+    `images/${year}/${month}/${date}.jpg`
+  )
+
+const previewUrl =
+  buildAssetUrl(
+    PREVIEW_BASE_URL,
+    `preview/${year}/${month}/${date}.jpg`
+  )
 
 function requestBuffer(url, retry = 0) {
   return new Promise((resolve, reject) => {
@@ -146,7 +181,7 @@ async function generatePreview(imageBuffer, previewFile) {
 
     if (buffer.length <= PREVIEW_MAX_SIZE) {
       fs.mkdirSync(path.dirname(previewFile), { recursive: true })
-      fs.writeFileSync(previewFile, buffer)
+      // fs.writeFileSync(previewFile, buffer)
       return { width: 1600, height: 900, quality, size: buffer.length }
     }
   }
@@ -159,7 +194,7 @@ async function generatePreview(imageBuffer, previewFile) {
 
     if (buffer.length <= PREVIEW_MAX_SIZE || quality === 70) {
       fs.mkdirSync(path.dirname(previewFile), { recursive: true })
-      fs.writeFileSync(previewFile, buffer)
+      // fs.writeFileSync(previewFile, buffer)
       return { width: 1280, height: 720, quality, size: buffer.length }
     }
   }
@@ -206,7 +241,7 @@ async function main() {
   const month = date.slice(5, 7)
 
   const jsonFile = path.join('data', year, `${month}.json`)
-  const imageFile = path.join('images', year, month, `${date}.jpg`)
+  // const imageFile = path.join('images', year, month, `${date}.jpg`)
   const previewFile = path.join('preview', year, month, `${date}.jpg`)
   const uhdImageFile = path.join(
     'bing-uhd',
@@ -325,10 +360,10 @@ async function main() {
       { recursive: true }
     )
     
-    fs.writeFileSync(
-      imageFile,
-      imageBuffer
-    )
+    // fs.writeFileSync(
+    //   imageFile,
+    //   imageBuffer
+    // )
     
     if (imageIsUhd) {
       fs.mkdirSync(
@@ -336,10 +371,10 @@ async function main() {
         { recursive: true }
       )
     
-      fs.writeFileSync(
-        uhdImageFile,
-        imageBuffer
-      )
+      // fs.writeFileSync(
+      //   uhdImageFile,
+      //   imageBuffer
+      // )
     
       log(
         `UHD image written to bing-uhd: ${uhdImageFile}`
@@ -417,7 +452,7 @@ async function main() {
   monthData.updatedAt = new Date().toISOString()
 
   fs.mkdirSync(path.dirname(jsonFile), { recursive: true })
-  fs.writeFileSync(jsonFile, JSON.stringify(monthData, null, 2) + '\n', 'utf8')
+  // fs.writeFileSync(jsonFile, JSON.stringify(monthData, null, 2) + '\n', 'utf8')
 
   // 每次每日任务都维护索引；即使今天的数据本来完整，也会执行上面的 buildIndex。
   buildIndex()
