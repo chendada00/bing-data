@@ -104,8 +104,17 @@ jobs:
           MODE: ${{ inputs.mode }}
           YEAR: ${{ inputs.year }}
           MAX_IMAGES: ${{ inputs.max_images }}
-          UHD_ROOT: ../bing-uhd
+          UHD_ROOT: bing-uhd
         run: |
+          set -e
+      
+          echo "Current directory:"
+          pwd
+      
+          echo "Checking bing-uhd:"
+          ls -la bing-uhd
+          ls -la bing-uhd/images || true
+      
           node scripts/repair-history.js
 
       - name: Commit bing-uhd
