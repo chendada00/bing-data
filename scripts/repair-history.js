@@ -43,6 +43,11 @@ const MAX_IMAGES = Number(
   process.env.MAX_IMAGES || 0
 )
 
+const FORCE_UHD =
+  String(
+    process.env.FORCE_UHD || 'false'
+  ).toLowerCase() === 'true'
+
 const MIN_UHD_WIDTH = 3000
 const MIN_UHD_HEIGHT = 1600
 const EXPECTED_UHD_WIDTH = 3840
@@ -1279,7 +1284,8 @@ async function getExistingImageBuffer(
 
 async function obtainUhd(
   source,
-  date
+  date,
+  forceDownload = false
 ) {
   const uhdFile =
     buildUhdFile(
@@ -1291,7 +1297,10 @@ async function obtainUhd(
       uhdFile
     )
 
-  if (existing) {
+  if (
+    existing &&
+    !forceDownload
+  ) {
     return {
       ...existing,
       buffer:
@@ -1375,26 +1384,27 @@ async function repairExistingItem(
   ) {
     item.title =
       source.title
+
     changed = true
   }
 
   if (
     source.copyright &&
-    item.description !==
-      source.copyright
+    item.description !== source.copyright
   ) {
     item.description =
       source.copyright
+
     changed = true
   }
 
   if (
     source.copyright &&
-    item.copyright !==
-      source.copyright
+    item.copyright !== source.copyright
   ) {
     item.copyright =
       source.copyright
+
     changed = true
   }
 
@@ -1405,23 +1415,13 @@ async function repairExistingItem(
   ) {
     item.copyrightLink =
       source.copyrightLink
+
     changed = true
   }
 
   if (
     officialUhdUrl &&
-    !isValidSourceImage(
-      item.sourceImage
-    )
-  ) {
-    item.sourceImage =
-      officialUhdUrl
-
-    changed = true
-  } else if (
-    officialUhdUrl &&
-    item.sourceImage !==
-      officialUhdUrl
+    item.sourceImage !== officialUhdUrl
   ) {
     item.sourceImage =
       officialUhdUrl
@@ -1432,14 +1432,13 @@ async function repairExistingItem(
   const uhd =
     await obtainUhd(
       source,
-      date
+      date,
+      options.forceUhd === true
     )
 
-  if (
-    uhd.downloaded
-  ) {
+  if (uhd.downloaded) {
     log(
-      `UHD added: ${date} (${uhd.width}x${uhd.height})`
+      `UHD refreshed: ${date} (${uhd.width}x${uhd.height})`
     )
   }
 
@@ -1447,7 +1446,8 @@ async function repairExistingItem(
     await generateDerivedData(
       uhd.buffer,
       item,
-      forceDerived
+      forceDerived ||
+        uhd.downloaded
     )
 
   for (
@@ -1464,15 +1464,6 @@ async function repairExistingItem(
     }
   }
 
-  const previewFile =
-    path.join(
-      'preview',
-      buildRelativePath(
-        '',
-        date
-      ) || ''
-    )
-
   const parsed =
     parseDate(date)
 
@@ -1485,9 +1476,8 @@ async function repairExistingItem(
     )
 
   if (
-    !fs.existsSync(
-      actualPreviewFile
-    )
+    uhd.downloaded ||
+    !fs.existsSync(actualPreviewFile)
   ) {
     await generatePreview(
       uhd.buffer,
@@ -1500,43 +1490,29 @@ async function repairExistingItem(
   }
 
   const previewUrl =
-    buildPreviewUrl(
-      date
-    )
+    buildPreviewUrl(date)
 
   if (
     previewUrl &&
-    item.preview !==
-      previewUrl
+    item.preview !== previewUrl
   ) {
     item.preview =
       previewUrl
+
     changed = true
   }
 
-  /*
-   * 这里暂时不要切换 image。
-   *
-   * repair 阶段只保证对应 UHD 已经存在。
-   * 真正切换到 IMAGE_BASE_URL 由 switch-image-url 完成。
-   */
-  if (
-    options.switchImage === true
-  ) {
-    const imageUrl =
-      buildImageUrl(
-        date
-      )
+  const imageUrl =
+    buildImageUrl(date)
 
-    if (
-      imageUrl &&
-      item.image !==
-        imageUrl
-    ) {
-      item.image =
-        imageUrl
-      changed = true
-    }
+  if (
+    imageUrl &&
+    item.image !== imageUrl
+  ) {
+    item.image =
+      imageUrl
+
+    changed = true
   }
 
   return {
@@ -1580,14 +1556,6 @@ async function createMissingItem(
       uhd.image
     )
 
-  const previewFile =
-    path.join(
-      'preview',
-      parsed.year,
-      parsed.month,
-      `${date}.jpg`
-    )
-
   if (
     !fs.existsSync(
       previewFile
@@ -1620,9 +1588,7 @@ async function createMissingItem(
       source.copyrightLink || null,
 
     image:
-      options.switchImage
-        ? buildImageUrl(date)
-        : '',
+      buildImageUrl(date),
 
     preview:
       buildPreviewUrl(date),
@@ -2110,9 +2076,9 @@ async function runRepair(
             date,
             {
               forceDerived:
-                false,
-              switchImage:
-                false
+                FORCE_UHD,
+              forceUhd:
+                FORCE_UHD
             }
           )
 

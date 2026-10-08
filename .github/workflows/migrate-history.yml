@@ -23,6 +23,12 @@ on:
         required: true
         default: "20"
 
+      force_uhd:
+        description: "重新从 Bing 官方地址下载 UHD，并重新生成所有派生数据"
+        required: true
+        default: false
+        type: boolean
+
 permissions:
   contents: write
 
@@ -104,6 +110,7 @@ jobs:
           MODE: ${{ inputs.mode }}
           YEAR: ${{ inputs.year }}
           MAX_IMAGES: ${{ inputs.max_images }}
+          FORCE_UHD: ${{ inputs.force_uhd }}
           UHD_ROOT: bing-uhd
         run: |
           set -e
