@@ -1538,7 +1538,13 @@ async function createMissingItem(
   const uhd =
     await obtainUhd(
       source,
-      date
+      date,
+      options?.forceUhd === true
+    )
+
+  const image =
+    await Jimp.read(
+      uhd.buffer
     )
 
   const base64 =
@@ -1553,10 +1559,19 @@ async function createMissingItem(
 
   const colorHistogram =
     await getColorHistogram(
-      uhd.image
+      image
+    )
+
+  const previewFile =
+    path.join(
+      'preview',
+      parsed.year,
+      parsed.month,
+      `${date}.jpg`
     )
 
   if (
+    uhd.downloaded ||
     !fs.existsSync(
       previewFile
     )
@@ -1585,13 +1600,18 @@ async function createMissingItem(
       source.copyright || '',
 
     copyrightLink:
-      source.copyrightLink || null,
+      source.copyrightLink ||
+      null,
 
     image:
-      buildImageUrl(date),
+      buildImageUrl(
+        date
+      ),
 
     preview:
-      buildPreviewUrl(date),
+      buildPreviewUrl(
+        date
+      ),
 
     sourceImage:
       officialUhdUrl,
@@ -1608,9 +1628,6 @@ async function createMissingItem(
     height:
       uhd.height,
 
-    /*
-     * 历史来源没有这些字段时不伪造。
-     */
     id: null,
 
     startDate: null,
@@ -2117,7 +2134,8 @@ async function runRepair(
           source,
           date,
           {
-            switchImage: false
+            forceUhd:
+              FORCE_UHD
           }
         )
 
@@ -2355,6 +2373,14 @@ async function main() {
   ) {
     fail(
       'HISTORY_SOURCE_BASE_URL is not configured'
+    )
+  }
+
+  if (
+    !IMAGE_BASE_URL
+  ) {
+    fail(
+      'IMAGE_BASE_URL is not configured'
     )
   }
 
