@@ -2048,66 +2048,6 @@ async function runCheck(
   )
 }
 
-  const orphanUhd = []
-
-  for (
-    const file of collectUhdFiles()
-  ) {
-    const date =
-      getDateFromUhdPath(
-        file
-      )
-
-    if (
-      !date
-    ) {
-      continue
-    }
-
-    if (
-      !sourceMap.has(date)
-    ) {
-      orphanUhd.push(
-        date
-      )
-    }
-  }
-
-  console.log('')
-  console.log(
-    '========== HISTORY CHECK =========='
-  )
-  console.log(
-    `Source records: ${total}`
-  )
-  console.log(
-    `Missing data records: ${missingData}`
-  )
-  console.log(
-    `Incomplete data records: ${incomplete}`
-  )
-  console.log(
-    `Missing UHD files: ${missingUhd}`
-  )
-  console.log(
-    `Invalid UHD files: ${invalidUhd}`
-  )
-  console.log(
-    `Orphan UHD files: ${orphanUhd.length}`
-  )
-  console.log(
-    '==================================='
-  )
-
-  if (
-    orphanUhd.length > 0
-  ) {
-    console.log(
-      `Orphan UHD dates: ${orphanUhd.join(', ')}`
-    )
-  }
-}
-
 async function runRepair(
   local,
   sources
