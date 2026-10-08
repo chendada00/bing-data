@@ -1,153 +1,139 @@
-# Bing Wallpaper Data
+# Bing Wallpaper
 
-Bing Wallpaper 的历史壁纸数据仓库。
+一个基于 Vue 3 + Vite 的 Bing 每日壁纸收藏、浏览与搜索网站。
 
-本仓库主要负责：
+在线网站：
 
-* Bing 每日壁纸数据采集
-* 历史数据保存
-* 图片与预览图保存
-* 图片颜色分析
-* 历史搜索索引生成
+**https://bing.伴随.cn**
 
-前端项目通过月度 JSON 文件读取这里的数据。
+本项目是整个 Bing Wallpaper 收藏系统的前端仓库。
+
+项目将数据、预览图和 UHD 高清原图拆分到独立仓库中：
+
+- `bing-wallpaper`：网站前端
+- `bing-data`：壁纸数据、预览图和历史索引
+- `bing-uhd`：UHD 高清原图
+
+三个仓库共同组成完整的 Bing Wallpaper 收藏系统。
 
 ---
 
-## 📁 目录结构
+## 项目组成
 
 ```text
-bing-data/
-├── data/
+Bing Wallpaper
+│
+├── bing-wallpaper
+│   └── Vue 3 + Vite 前端网站
+│
+├── bing-data
+│   ├── 月度 JSON 数据
 │   ├── index.json
-│   └── YYYY/
-│       ├── 01.json
-│       ├── 02.json
-│       ├── ...
-│       └── 12.json
+│   └── preview 预览图
 │
-├── images/
-│   └── ...
-│
-├── preview/
-│   └── ...
-│
-├── scripts/
-│   ├── update-bing.js
-│   └── ...
-│
-├── .github/
-│   └── workflows/
-│       └── update-bing.yml
-│
-└── _headers
+└── bing-uhd
+    └── UHD 高清原图
 ```
+
+数据仓库：
+
+**https://bing-data.伴随.cn**
+
+UHD 图片仓库：
+
+**https://bing-uhd.伴随.cn**
 
 ---
 
-## 📦 月度数据
+## 功能
 
-壁纸按照月份保存。
-
-例如：
-
-```text
-data/2026/09.json
-```
-
-结构：
-
-```json
-{
-  "year": 2026,
-  "month": 9,
-  "items": [
-    {
-      "date": "2026-09-23",
-      "title": "Example title",
-      "description": "Example description",
-      "copyright": "Example copyright",
-      "copyrightLink": "https://example.com",
-      "image": "https://example.com/image.jpg",
-      "preview": "https://example.com/preview.jpg",
-      "color": {},
-      "colorHistogram": {
-        "version": 1,
-        "bins": []
-      }
-    }
-  ]
-}
-```
+- Bing 每日壁纸浏览
+- 历史壁纸时间线
+- 关键词搜索
+- 按日期搜索
+- 全历史搜索
+- 颜色搜索
+- 主色调分析
+- HSV 色彩直方图
+- 图片色彩指纹
+- 高清图片查看
+- UHD 原图查看
+- 原图下载
+- 壁纸详情页
+- 每张壁纸独立 URL
+- Sitemap
+- SEO 元数据
+- 移动端适配
 
 ---
 
-## 🎨 Color 数据
+## 图片加载策略
 
-每张图片会保存颜色分析结果。
+网站不会直接使用 UHD 图片作为首页卡片。
 
-### `color`
+不同场景使用不同资源：
 
-保存图片的主要颜色信息。
+```text
+首页卡片
+    ↓
+preview
+```
 
-主要用于：
+```text
+详情页 / 高清查看器
+    ↓
+sourceImage
+    ↓
+image
+    ↓
+preview
+```
 
-* 页面主色展示
-* 颜色选择
-* 视觉效果
+其中：
+
+- `sourceImage`：Bing 官方 UHD 原图地址
+- `image`：项目自己的 UHD 高清镜像
+- `preview`：网站浏览使用的预览图
+- `base64`：用于快速模糊占位和首页背景
+
+首页使用预览图可以避免一次加载大量 UHD 图片。
+
+高清查看时优先使用官方 UHD 地址，如果官方地址不可用，则回退到项目自己的 UHD 镜像。
 
 ---
 
-## 📊 `colorHistogram`
+## 数据来源
 
-`colorHistogram` 是图片的 HSV 颜色分布数据。
-
-当前版本：
+前端默认从独立的数据仓库读取数据：
 
 ```text
-Hue        12 桶
-Saturation 3 桶
-Value      3 桶
-
-12 × 3 × 3 = 108
+https://bing-data.伴随.cn
 ```
 
-因此：
-
-```json
-{
-  "version": 1,
-  "bins": [ ... 108 个数值 ... ]
-}
-```
-
-`bins` 中的每个数字表示：
-
-> 图片中落入对应 HSV 色彩区域的像素数量。
-
-它描述的是整张图片的颜色分布，而不是图片的空间位置。
-
-因此：
+主要数据结构：
 
 ```text
-bins[0]
+data/
+├── index.json
+└── YYYY/
+    ├── 01.json
+    ├── 02.json
+    └── ...
 ```
 
-并不代表：
-
-```text
-图片左上角
-```
-
-而是代表一个特定的 HSV 颜色区域。
+每个月的数据单独保存，因此前端不需要一次加载全部历史数据。
 
 ---
 
-## 🔎 历史索引
+## 历史搜索
 
-`data/index.json` 用于支持全历史搜索。
+全历史搜索使用：
 
-索引保存轻量级的数据：
+```text
+data/index.json
+```
+
+索引保存轻量级信息：
 
 ```text
 日期
@@ -155,97 +141,78 @@ bins[0]
 描述
 ```
 
-示例：
-
-```json
-[
-  [
-    "2026-09-23",
-    "Example title",
-    "Example description"
-  ]
-]
-```
-
-前端首先搜索这个索引。
-
-找到匹配日期后，再加载对应月份的数据。
-
-这样可以避免为了搜索历史数据而一次性下载全部月度 JSON。
-
----
-
-## 🖼️ 图片
-
-图片与 JSON 数据分开保存。
+搜索流程：
 
 ```text
-images/
-preview/
+关键词
+   ↓
+index.json
+   ↓
+匹配日期
+   ↓
+按月份分组
+   ↓
+加载对应月份 JSON
+   ↓
+最终搜索
 ```
 
-其中：
-
-* `images`：原图
-* `preview`：前端浏览使用的预览图
-
-前端通常先加载 `preview`，用户进入详情页后再加载原图。
+这样可以在静态网站架构下支持较大规模的历史数据。
 
 ---
 
-## 🔄 数据更新
+## 色彩分析
 
-数据通过 GitHub Actions 定期更新。
+每张壁纸包含主色调和颜色直方图。
 
-主要流程：
+颜色直方图使用：
 
 ```text
-Bing
- ↓
-获取每日壁纸
- ↓
-保存图片
- ↓
-生成 preview
- ↓
-颜色分析
- ↓
-生成 colorHistogram
- ↓
-更新月度 JSON
- ↓
-更新 index.json
- ↓
-提交 Git
+Hue        12
+Saturation 3
+Value      3
+
+12 × 3 × 3
+= 108 个区域
 ```
 
----
+108 个区域描述整张图片的 HSV 颜色分布。
 
-## 🌐 Cloudflare Pages
+它不是图片的空间缩略图。
 
-本仓库可以作为静态数据源部署到 Cloudflare Pages。
-
-部署后：
+例如：
 
 ```text
-前端
+bin
  ↓
-Cloudflare Pages
- ↓
-/data/YYYY/MM.json
-/images/*
-/preview/*
+代表某个 HSV 颜色区域
+
+不是：
+
+左上角
+右上角
+左下角
+右下角
 ```
 
-可以利用 HTTP Cache 缓存静态数据和图片。
+详情页可以查看完整的 108 个颜色区域。
 
-其中图片和预览图属于基本不会变化的静态资源，可以使用较长的缓存时间。
-
-月度 JSON 和 `index.json` 更新频率更高，因此应该使用相对短的缓存时间。
+首页则使用简化后的颜色指纹展示。
 
 ---
 
-## 🧪 本地开发
+## 技术栈
+
+- Vue 3
+- Vite
+- JavaScript
+- CSS
+
+项目为纯前端静态网站。
+
+---
+
+## 本地运行
 
 安装依赖：
 
@@ -253,34 +220,101 @@ Cloudflare Pages
 npm install
 ```
 
-根据项目中的脚本运行对应的数据处理任务。
+启动开发环境：
+
+```bash
+npm run dev
+```
+
+构建：
+
+```bash
+npm run build
+```
+
+预览生产构建：
+
+```bash
+npm run preview
+```
 
 ---
 
-## 📌 数据设计原则
+## 环境变量
 
-### 月度 JSON
+```env
+VITE_DATA_BASE_URL=https://bing-data.伴随.cn
+VITE_SITE_URL=https://bing.伴随.cn
+```
 
-负责保存完整壁纸数据。
+其中：
 
-### `index.json`
+- `VITE_DATA_BASE_URL`：数据仓库地址
+- `VITE_SITE_URL`：网站正式地址
 
-负责快速历史搜索。
+项目还使用 JSONBin 提供网站通知功能。
 
-### `color`
+---
 
-负责主色调展示。
+## 部署
 
-### `colorHistogram`
+项目可以部署到支持静态网站的服务。
+
+当前网站部署地址：
+
+**https://bing.伴随.cn**
+
+数据和图片资源分别部署：
+
+```text
+前端：
+bing.伴随.cn
+
+数据：
+bing-data.伴随.cn
+
+UHD：
+bing-uhd.伴随.cn
+```
+
+---
+
+## 相关仓库
+
+### 前端
+
+本仓库：
+
+```text
+chendada00/bing-wallpaper
+```
+
+负责网站页面、搜索、浏览、详情页和图片展示。
+
+### 数据
+
+```text
+chendada00/bing-data
+```
 
 负责：
 
-* 颜色相似度搜索
-* 色彩分布可视化
-* 更细粒度的颜色分析
+- 每日壁纸数据
+- 历史 JSON
+- index.json
+- preview
+- 颜色分析数据
+
+### UHD
+
+```text
+chendada00/bing-uhd
+```
+
+负责保存 UHD 高清原图。
 
 ---
 
-## 📄 License
+## License
 
 MIT
