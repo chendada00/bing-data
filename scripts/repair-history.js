@@ -1749,8 +1749,31 @@ function reportItem(
     return
   }
 
+  const fieldNames = {
+    date: '日期',
+    title: '标题',
+    description: '描述',
+    copyright: '版权信息',
+    copyrightLink: '版权链接',
+    image: '高清图片地址',
+    preview: '预览图片地址',
+    sourceImage: '官方 UHD 图片地址',
+    base64: 'Base64 缩略图',
+    color: '主色调',
+    colorHistogram: '颜色直方图',
+    width: '图片宽度',
+    height: '图片高度'
+  }
+
+  const readableFields =
+    missing.map(
+      field =>
+        fieldNames[field] ||
+        field
+    )
+
   console.log(
-    `[CHECK] ${date} missing/invalid: ${missing.join(', ')}`
+    `[检查] ${date} 数据不完整：${readableFields.join('、')}`
   )
 
   if (
@@ -1767,7 +1790,7 @@ function reportItem(
         official
     ) {
       console.log(
-        `        official UHD should be: ${official}`
+        `        正确的官方 UHD 地址：${official}`
       )
     }
   }
@@ -1789,12 +1812,41 @@ async function runCheck(
     )
   }
 
+  /*
+   * 历史资料源当前最大的日期。
+   *
+   * 例如：
+   * 历史源最新只有 2026-10-07
+   * 那么 2026-10-08 的 UHD 就属于：
+   *
+   * “待历史资料源收录”
+   *
+   * 而不是“孤立 UHD”。
+   */
+  const sourceDates =
+    Array.from(
+      sourceMap.keys()
+    ).sort()
+
+  const latestSourceDate =
+    sourceDates.length > 0
+      ? sourceDates[
+          sourceDates.length - 1
+        ]
+      : null
+
   let total = 0
   let missingData = 0
   let incomplete = 0
   let invalidUhd = 0
   let missingUhd = 0
 
+  const pendingSourceUhd = []
+  const orphanUhd = []
+
+  /*
+   * 检查历史资料源中的每一天
+   */
   for (
     const [date, source] of sourceMap
   ) {
@@ -1805,36 +1857,45 @@ async function runCheck(
         date
       )
 
+    /*
+     * bing-data 中完全没有这一天
+     */
     if (!localRecord) {
       console.log(
-        `[CHECK] DATA MISSING: ${date}`
+        `[检查] 缺少数据记录：${date}`
       )
 
       missingData++
 
-      continue
+      /*
+       * 没有 JSON 记录的情况下，
+       * 这里先继续检查 UHD。
+       */
+    } else {
+      const item =
+        localRecord.item
+
+      const missing =
+        getMissingFields(
+          item
+        )
+
+      if (
+        missing.length > 0
+      ) {
+        incomplete++
+
+        reportItem(
+          date,
+          source,
+          item
+        )
+      }
     }
 
-    const item =
-      localRecord.item
-
-    const missing =
-      getMissingFields(
-        item
-      )
-
-    if (
-      missing.length > 0
-    ) {
-      incomplete++
-
-      reportItem(
-        date,
-        source,
-        item
-      )
-    }
-
+    /*
+     * 检查 UHD 文件
+     */
     const uhdFile =
       buildUhdFile(
         date
@@ -1848,7 +1909,7 @@ async function runCheck(
       missingUhd++
 
       console.log(
-        `[CHECK] UHD MISSING: ${date}`
+        `[检查] 缺少 UHD 图片：${date}`
       )
 
       continue
@@ -1863,10 +1924,129 @@ async function runCheck(
       invalidUhd++
 
       console.log(
-        `[CHECK] UHD INVALID: ${date} -> ${uhdFile}`
+        `[检查] UHD 图片无效：${date}`
       )
     }
   }
+
+  /*
+   * 检查 bing-uhd 中存在、
+   * 但历史资料源中没有的文件。
+   */
+  for (
+    const file of collectUhdFiles()
+  ) {
+    const date =
+      getDateFromUhdPath(
+        file
+      )
+
+    if (!date) {
+      continue
+    }
+
+    /*
+     * 历史资料源已经有这个日期，
+     * 正常，不是孤立文件。
+     */
+    if (
+      sourceMap.has(date)
+    ) {
+      continue
+    }
+
+    /*
+     * 如果日期比历史资料源最新日期还新，
+     * 说明很可能是 Bing 每日任务已经提前下载，
+     * 而第三方历史资料源还没有更新。
+     */
+    if (
+      latestSourceDate &&
+      date > latestSourceDate
+    ) {
+      pendingSourceUhd.push(
+        date
+      )
+
+      continue
+    }
+
+    /*
+     * 既不在历史源，也不是历史源之后的新日期，
+     * 才真正算孤立 UHD。
+     */
+    orphanUhd.push(
+      date
+    )
+  }
+
+  /*
+   * 排序，避免日志顺序不稳定。
+   */
+  pendingSourceUhd.sort()
+  orphanUhd.sort()
+
+  console.log('')
+  console.log(
+    '========== 历史数据检查 =========='
+  )
+
+  console.log(
+    `历史资料源记录：${total}`
+  )
+
+  console.log(
+    `缺少数据记录：${missingData}`
+  )
+
+  console.log(
+    `数据字段不完整：${incomplete}`
+  )
+
+  console.log(
+    `缺少 UHD 图片：${missingUhd}`
+  )
+
+  console.log(
+    `UHD 图片无效：${invalidUhd}`
+  )
+
+  console.log(
+    `待历史资料源收录的 UHD：${pendingSourceUhd.length}`
+  )
+
+  if (
+    pendingSourceUhd.length > 0
+  ) {
+    console.log(
+      `待收录日期：${pendingSourceUhd.join(', ')}`
+    )
+  }
+
+  console.log(
+    `真正孤立的 UHD：${orphanUhd.length}`
+  )
+
+  if (
+    orphanUhd.length > 0
+  ) {
+    console.log(
+      `孤立 UHD 日期：${orphanUhd.join(', ')}`
+    )
+  }
+
+  if (
+    latestSourceDate
+  ) {
+    console.log(
+      `历史资料源最新日期：${latestSourceDate}`
+    )
+  }
+
+  console.log(
+    '==================================='
+  )
+}
 
   const orphanUhd = []
 
