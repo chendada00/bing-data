@@ -208,7 +208,13 @@ async function main() {
   const jsonFile = path.join('data', year, `${month}.json`)
   const imageFile = path.join('images', year, month, `${date}.jpg`)
   const previewFile = path.join('preview', year, month, `${date}.jpg`)
-
+  const uhdImageFile = path.join(
+    'bing-uhd',
+    'images',
+    year,
+    month,
+    `${date}.jpg`
+  )
   log(`Today: ${date}`)
 
   const monthData = loadMonthData(jsonFile, year, month)
@@ -231,12 +237,36 @@ async function main() {
 
   if (isComplete) {
     log("Today's wallpaper is already complete; rebuilding history index only.")
+  
+    if (
+      !fs.existsSync(uhdImageFile) &&
+      existing.width >= 3000 &&
+      existing.height >= 1600 &&
+      existing.sourceImage &&
+      existing.sourceImage.includes('_UHD.jpg')
+    ) {
+      fs.mkdirSync(
+        path.dirname(uhdImageFile),
+        { recursive: true }
+      )
+  
+      fs.copyFileSync(
+        imageFile,
+        uhdImageFile
+      )
+  
+      log(
+        `Copied existing UHD image to bing-uhd: ${uhdImageFile}`
+      )
+    }
+  
     buildIndex()
     return
   }
 
   let imageBuffer
   let actualImageUrl = existing?.sourceImage || null
+  let imageIsUhd = false
   let bing = null
 
   if (imageExists) {
@@ -259,17 +289,66 @@ async function main() {
       : null
 
     try {
-      if (!uhdImageUrl) throw new Error('Bing API does not provide urlbase.')
-      imageBuffer = await downloadImage(uhdImageUrl)
-      actualImageUrl = uhdImageUrl
+      if (!uhdImageUrl) {
+        throw new Error(
+          'Bing API does not provide urlbase.'
+        )
+      }
+    
+      imageBuffer =
+        await downloadImage(uhdImageUrl)
+    
+      actualImageUrl =
+        uhdImageUrl
+    
+      imageIsUhd = true
+    
     } catch (error) {
-      log(`UHD download failed: ${error.message}`)
-      imageBuffer = await downloadImage(defaultImageUrl)
-      actualImageUrl = defaultImageUrl
+    
+      log(
+        `UHD download failed: ${error.message}`
+      )
+    
+      imageBuffer =
+        await downloadImage(
+          defaultImageUrl
+        )
+    
+      actualImageUrl =
+        defaultImageUrl
+    
+      imageIsUhd = false
     }
-
-    fs.mkdirSync(path.dirname(imageFile), { recursive: true })
-    fs.writeFileSync(imageFile, imageBuffer)
+    
+    fs.mkdirSync(
+      path.dirname(imageFile),
+      { recursive: true }
+    )
+    
+    fs.writeFileSync(
+      imageFile,
+      imageBuffer
+    )
+    
+    if (imageIsUhd) {
+      fs.mkdirSync(
+        path.dirname(uhdImageFile),
+        { recursive: true }
+      )
+    
+      fs.writeFileSync(
+        uhdImageFile,
+        imageBuffer
+      )
+    
+      log(
+        `UHD image written to bing-uhd: ${uhdImageFile}`
+      )
+    } else {
+      log(
+        'Downloaded image is not UHD; bing-uhd will not be updated for this date.'
+      )
+    }
   }
 
   if (!bing && existing) {
