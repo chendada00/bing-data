@@ -34,6 +34,11 @@ on:
         description: "Maximum records to process. 0 = unlimited"
         required: true
         default: "20"
+      history_source_url:
+        description: "完整历史数据 JSON 地址"
+        required: true
+        default: "https://cdn.jsdelivr.net/gh/Zhu-junwei/bing-wallpaper-archive/Bing_zh-CN_all.json"
+        type: string
 
       force_uhd:
         description: "重新从 Bing 官方地址下载 UHD，并重新生成所有派生数据"
@@ -126,6 +131,7 @@ jobs:
           MAX_IMAGES: ${{ inputs.max_images }}
           FORCE_UHD: ${{ inputs.force_uhd }}
           UHD_ROOT: bing-uhd
+          HISTORY_SOURCE_URL: ${{ inputs.history_source_url }}
         run: |
           set -e
       

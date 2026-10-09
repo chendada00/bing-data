@@ -23,6 +23,10 @@ const IMAGE_BASE_URL = (
   process.env.IMAGE_BASE_URL || ''
 ).replace(/\/$/, '')
 
+const HISTORY_SOURCE_URL = (
+  process.env.HISTORY_SOURCE_URL || ''
+).trim()
+
 const HISTORY_SOURCE_BASE_URL = (
   process.env.HISTORY_SOURCE_BASE_URL || ''
 ).replace(/\/$/, '')
@@ -137,9 +141,18 @@ function getImageIdentity(value) {
     return null
   }
 
-  const match = value.match(/OHR[._]([A-Za-z0-9]+)/i)
+  const match = value.match(/OHR[._]([^?&#/]+)/i)
+  if (!match) {
+    return null
+  }
 
-  return match ? match[1].toLowerCase() : null
+  const identity = match[1]
+    .replace(/\.(?:jpg|jpeg|png|webp)$/i, '')
+    .replace(/_(?:UHD|\d+x\d+)$/i, '')
+    .replace(/_[A-Z]{2}-[A-Z]{2}\d*$/i, '')
+    .trim()
+
+  return identity ? identity.toLowerCase() : null
 }
 
 function getDisplayDate(record) {
@@ -147,40 +160,80 @@ function getDisplayDate(record) {
     return null
   }
 
-  // 官方历史数据优先使用 enddate。
-  // 新数据源的 date 已经是归档的展示日期，不再额外加一天。
   const endDate = normalizeDate(record.enddate)
-  if (endDate) return endDate
+  if (endDate) {
+    return endDate
+  }
 
   const archiveDate = normalizeDate(record.date)
-  if (archiveDate) return archiveDate
-
-  // 仅在没有 date/enddate 时，尝试从完整时间推导。
-  // 这里按中国时区 UTC+8 转换。
-  const fullStartDate = String(record.fullstartdate || '')
-  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(
-    fullStartDate
-  )
-
-  if (match) {
-    const timestamp = Date.UTC(
-      Number(match[1]),
-      Number(match[2]) - 1,
-      Number(match[3]),
-      Number(match[4]),
-      Number(match[5])
-    )
-
-    const local = new Date(timestamp + 8 * 60 * 60 * 1000)
-
-    return [
-      local.getUTCFullYear(),
-      String(local.getUTCMonth() + 1).padStart(2, '0'),
-      String(local.getUTCDate()).padStart(2, '0')
-    ].join('-')
+  if (archiveDate) {
+    return archiveDate
   }
 
   return null
+}
+
+function normalizeSourceRecord(record) {
+  if (!record || typeof record !== 'object') {
+    return null
+  }
+
+  const date = getDisplayDate(record)
+  if (!date) {
+    return null
+  }
+
+  const urlbase =
+    typeof record.urlbase === 'string'
+      ? record.urlbase.trim()
+      : ''
+
+  const url =
+    typeof record.url === 'string'
+      ? record.url.trim()
+      : ''
+
+  if (!urlbase) {
+    return null
+  }
+
+  return {
+    date,
+    identity: getImageIdentity(urlbase || url),
+
+    title:
+      typeof record.title === 'string'
+        ? record.title.trim()
+        : '',
+
+    description:
+      typeof record.description === 'string'
+        ? record.description.trim()
+        : '',
+
+    copyright:
+      typeof record.copyright === 'string'
+        ? record.copyright.trim()
+        : '',
+
+    copyrightKeyword: '',
+
+    copyrightLink:
+      typeof record.copyrightlink === 'string'
+        ? record.copyrightlink.trim()
+        : null,
+
+    url,
+    urlbase,
+    fullstartdate: record.fullstartdate || null,
+    startdate: record.startdate || null,
+    enddate: record.enddate || null,
+    hsh: record.hsh || null,
+
+    // 归档记录有官方 urlbase 时，允许 repair 尝试获取 UHD。
+    // 最终仍必须通过现有 UHD 图片尺寸校验。
+    uhd: Boolean(urlbase)
+  }
 }
 
 function parseDate(date) {
@@ -790,36 +843,86 @@ async function fetchJson(
 
 
 async function loadHistorySource(year) {
-  const url =
-    `${HISTORY_SOURCE_BASE_URL}/${year}.json`
+  let url
 
-  log(`Loading history source: ${url}`)
-
-  const data = await fetchJson(url)
-
-  if (!Array.isArray(data)) {
+  if (HISTORY_SOURCE_URL) {
+    url = HISTORY_SOURCE_URL
+  } else if (HISTORY_SOURCE_BASE_URL) {
+    url = `${HISTORY_SOURCE_BASE_URL}/${year}.json`
+  } else {
     throw new Error(
-      `History source is not an array: ${url}`
+      'Set HISTORY_SOURCE_URL or HISTORY_SOURCE_BASE_URL'
     )
   }
 
-  const normalized = data
+  log(`Loading history source: ${url}`)
+
+  const payload = await fetchJson(url)
+
+  const records = Array.isArray(payload)
+    ? payload
+    : Array.isArray(payload?.images)
+      ? payload.images
+      : null
+
+  if (!records) {
+    throw new Error(
+      `Unsupported history source format: ${url}`
+    )
+  }
+
+  const normalized = records
     .map(normalizeSourceRecord)
     .filter(Boolean)
+    .filter(record => record.date.startsWith(`${year}-`))
+    .filter(record => record.uhd)
 
-  // 只对源仓库明确标记支持 UHD 的记录执行修复。
-  const uhdRecords = normalized.filter(
-    record => record.uhd === true
-  )
+  const byDate = new Map()
+  const byIdentity = new Map()
+
+  for (const record of normalized) {
+    const existingDate = byDate.get(record.date)
+
+    if (
+      existingDate &&
+      existingDate.identity &&
+      record.identity &&
+      existingDate.identity !== record.identity
+    ) {
+      throw new Error(
+        `Source date collision: ${record.date}; ` +
+        `${existingDate.identity} vs ${record.identity}`
+      )
+    }
+
+    byDate.set(record.date, record)
+
+    if (record.identity) {
+      const existingIdentity = byIdentity.get(record.identity)
+
+      if (
+        existingIdentity &&
+        existingIdentity.date !== record.date
+      ) {
+        log(
+          `[SOURCE WARNING] Same image identity has multiple dates: ` +
+          `${record.identity}, ${existingIdentity.date} and ${record.date}`
+        )
+      }
+
+      byIdentity.set(record.identity, record)
+    }
+  }
+
+  const result = [...byDate.values()]
+    .sort((a, b) => a.date.localeCompare(b.date))
 
   log(
-    `Loaded ${normalized.length} records for ${year}; ` +
-    `${uhdRecords.length} support UHD`
+    `Loaded ${result.length} UHD-capable source records for ${year}`
   )
 
-  return uhdRecords
+  return result
 }
-
 
 function collectMonthFiles(
   dir
@@ -1647,6 +1750,7 @@ async function repairExistingItem(
 
   if (
     uhd.downloaded ||
+    forceDerived ||
     !fs.existsSync(actualPreviewFile)
   ) {
     await generatePreview(
@@ -2247,6 +2351,161 @@ async function runCheck(
   )
 }
 
+function migrateRecordsByIdentity(local, sources, changedFiles) {
+  const sourceByIdentity = new Map()
+
+  for (const source of sources) {
+    if (!source.identity) continue
+
+    const previous = sourceByIdentity.get(source.identity)
+
+    if (previous && previous.date !== source.date) {
+      throw new Error(
+        `Source identity maps to multiple dates: ${source.identity}; ` +
+        `${previous.date} and ${source.date}`
+      )
+    }
+
+    sourceByIdentity.set(source.identity, source)
+  }
+
+  const localItems = []
+
+  for (const [file, data] of local.fileData.entries()) {
+    if (!data || !Array.isArray(data.items)) continue
+
+    for (const item of data.items) {
+      if (!item || !isValidDate(item.date)) continue
+
+      localItems.push({
+        item,
+        file,
+        identity: getImageIdentity(
+          item.sourceImage || item.image || ''
+        )
+      })
+    }
+  }
+
+  const groups = new Map()
+
+  for (const entry of localItems) {
+    if (!entry.identity) continue
+
+    const source = sourceByIdentity.get(entry.identity)
+    if (!source) continue
+
+    if (!groups.has(source.date)) {
+      groups.set(source.date, [])
+    }
+
+    groups.get(source.date).push({
+      ...entry,
+      source
+    })
+  }
+
+  for (const [targetDate, entries] of groups) {
+    const targetRecord = local.records.get(targetDate)
+
+    // 如果目标日期已经有另一张图片，不能直接覆盖或删除。
+    if (
+      targetRecord &&
+      getImageIdentity(
+        targetRecord.item.sourceImage ||
+        targetRecord.item.image ||
+        ''
+      ) !== entries[0].identity
+    ) {
+      log(
+        `[DATE CONFLICT] ${targetDate} already contains another image; ` +
+        `skip automatic migration`
+      )
+      continue
+    }
+
+    // 优先保留目标日期的记录；否则选第一条同图记录迁移。
+    const keeper =
+      entries.find(entry => entry.item.date === targetDate) ||
+      entries[0]
+
+    const target = ensureMonthData(
+      local.fileData,
+      targetDate
+    )
+
+    const targetItems = target.data.items
+
+    // 如果目标月份已有同一张图，移除重复项，避免一图多条。
+    for (let i = targetItems.length - 1; i >= 0; i--) {
+      const candidate = targetItems[i]
+
+      if (
+        candidate !== keeper.item &&
+        getImageIdentity(
+          candidate.sourceImage || candidate.image || ''
+        ) === keeper.identity
+      ) {
+        targetItems.splice(i, 1)
+        changedFiles.add(target.file)
+      }
+    }
+
+    const oldDate = keeper.item.date
+    const oldFile = keeper.file
+
+    if (oldDate !== targetDate) {
+      const oldData = local.fileData.get(oldFile)
+
+      if (oldData && Array.isArray(oldData.items)) {
+        const index = oldData.items.indexOf(keeper.item)
+
+        if (index !== -1) {
+          oldData.items.splice(index, 1)
+          changedFiles.add(oldFile)
+        }
+      }
+
+      keeper.item.date = targetDate
+      targetItems.push(keeper.item)
+      changedFiles.add(target.file)
+
+      log(`[MIGRATE] ${oldDate} -> ${targetDate}`)
+    }
+
+    // 删除其他月份里同一图片的重复记录。
+    for (const entry of entries) {
+      if (entry.item === keeper.item) continue
+
+      const oldData = local.fileData.get(entry.file)
+
+      if (oldData && Array.isArray(oldData.items)) {
+        const index = oldData.items.indexOf(entry.item)
+
+        if (index !== -1) {
+          oldData.items.splice(index, 1)
+          changedFiles.add(entry.file)
+          log(`[DUPLICATE REMOVED] ${entry.item.date}`)
+        }
+      }
+    }
+  }
+
+  // 重建日期索引，确保后续 repair 能找到迁移后的记录。
+  local.records.clear()
+
+  for (const [file, data] of local.fileData.entries()) {
+    if (!data || !Array.isArray(data.items)) continue
+
+    for (const item of data.items) {
+      if (!item || !isValidDate(item.date)) continue
+
+      const date = normalizeDate(item.date)
+      local.records.set(date, { item, file })
+    }
+  }
+}
+
 async function runRepair(
   local,
   sources
@@ -2285,6 +2544,12 @@ async function runRepair(
 
   const changedFiles =
     new Set()
+
+  migrateRecordsByIdentity(
+    local,
+    sources,
+    changedFiles
+  )
 
   let processed = 0
   let repaired = 0
