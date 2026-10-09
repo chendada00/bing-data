@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 8,
-  "updatedAt": "2026-10-09T14:46:43.528Z",
+  "updatedAt": "2026-10-09T15:10:11.724Z",
   "items": [
     {
       "date": "2026-08-01",
@@ -3869,13 +3869,13 @@
       }
     },
     {
-      "date": "2026-08-29",
+      "date": "2026-08-30",
       "title": "名为鲨鱼的巨型鱼类",
       "description": "鲸鲨与黄金鲹，极乐鸟湾，西巴布亚，印度尼西亚 (© Pete Oxford/Nature Picture Library)",
       "copyright": "鲸鲨与黄金鲹，极乐鸟湾，西巴布亚，印度尼西亚 (© Pete Oxford/Nature Picture Library)",
       "copyrightLink": "https://www.bing.com/search?q=%E9%B2%B8%E9%B2%A8&form=hpcapt&mkt=zh-cn",
-      "image": "https://bing-uhd.伴随.cn/images/2026/08/2026-08-29.jpg",
-      "preview": "https://bing-data.伴随.cn/preview/2026/08/2026-08-29.jpg",
+      "image": "https://bing-uhd.伴随.cn/images/2026/08/2026-08-30.jpg",
+      "preview": "https://bing-data.伴随.cn/preview/2026/08/2026-08-30.jpg",
       "sourceImage": "https://www.bing.com/th?id=OHR.YellowShark_ZH-CN1570569826_UHD.jpg",
       "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/AN7Wfj7o3h7w0xnjZ7lCqxpb27PxznkHOeg5GOa/U81w2Lw8oSwVO669fw7H82cMwoZlCrTzas1Ky5be6l3d76vyenr08w8SfFrRdaJuLeGZlcbj9riVCT7DOfzA/GvZyutXxNJvE0uRrTqr/Jnk5lw3SweKtgcQ6kXrruvmtH9yPKfFX/HuPrXt1Nj18B8RzMv+oH1/rXDS3l6/oj3+q9D/AP/Z",
       "color": {
@@ -3891,7 +3891,7 @@
       "id": "a0c71e041552878a6b97866e415a3a5d",
       "startDate": "20260828",
       "fullStartDate": "202608281600",
-      "endDate": "20260829",
+      "endDate": "20260830",
       "colorHistogram": {
         "version": 1,
         "bins": [
