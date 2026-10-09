@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 4,
-  "updatedAt": "2026-10-09T01:03:53.157Z",
+  "updatedAt": "2026-10-09T09:01:25.700Z",
   "items": [
     {
       "date": "2026-04-01",
@@ -27,7 +27,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260401",
       "colorHistogram": {
         "version": 1,
         "bins": [

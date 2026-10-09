@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 3,
-  "updatedAt": "2026-10-09T08:53:53.516Z",
+  "updatedAt": "2026-10-09T09:01:25.700Z",
   "items": [
     {
       "date": "2026-03-01",
@@ -165,7 +165,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260302",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -303,7 +303,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260303",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -441,7 +441,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260304",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -579,7 +579,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260305",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -717,7 +717,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260306",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -855,7 +855,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260307",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -993,7 +993,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260308",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1131,7 +1131,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260309",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1269,7 +1269,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260310",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1407,7 +1407,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260311",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1545,7 +1545,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260312",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1683,7 +1683,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260313",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1821,7 +1821,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260314",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -1959,7 +1959,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260315",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2097,7 +2097,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260316",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2235,7 +2235,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260317",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2373,7 +2373,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260318",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2511,7 +2511,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260319",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2649,7 +2649,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260320",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2787,7 +2787,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260321",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2925,7 +2925,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260322",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3063,7 +3063,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260323",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3201,7 +3201,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260324",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3339,7 +3339,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260325",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3477,7 +3477,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260326",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3615,7 +3615,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260327",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3753,7 +3753,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260328",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3891,7 +3891,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260329",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -4029,7 +4029,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260330",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -4167,7 +4167,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260331",
       "colorHistogram": {
         "version": 1,
         "bins": [
