@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 8,
-  "updatedAt": "2026-10-09T11:00:46.710Z",
+  "updatedAt": "2026-10-09T14:46:43.528Z",
   "items": [
     {
       "date": "2026-08-01",
@@ -4007,13 +4007,13 @@
       }
     },
     {
-      "date": "2026-08-30",
+      "date": "2026-08-31",
       "title": "图案艺术的典范",
       "description": "雷吉斯坦广场的建筑细节，撒马尔罕，乌兹别克斯坦 (© Piero M. Bianchi/Getty Images)",
       "copyright": "雷吉斯坦广场的建筑细节，撒马尔罕，乌兹别克斯坦 (© Piero M. Bianchi/Getty Images)",
       "copyrightLink": "https://www.bing.com/search?q=%E6%92%92%E9%A9%AC%E5%B0%94%E7%BD%95&form=hpcapt&mkt=zh-cn",
-      "image": "https://bing-uhd.伴随.cn/images/2026/08/2026-08-30.jpg",
-      "preview": "https://bing-data.伴随.cn/preview/2026/08/2026-08-30.jpg",
+      "image": "https://bing-uhd.伴随.cn/images/2026/08/2026-08-31.jpg",
+      "preview": "https://bing-data.伴随.cn/preview/2026/08/2026-08-31.jpg",
       "sourceImage": "https://www.bing.com/th?id=OHR.SamarkandCeiling_ZH-CN1818913296_UHD.jpg",
       "base64": "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wCEAAMCAgMCAgMDAwMEAwMEBQgFBQQEBQoHBwYIDAoMDAsKCwsNDhIQDQ4RDgsLEBYQERMUFRUVDA8XGBYUGBIUFRQBAwQEBQQFCQUFCRQNCw0UFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFBQUFP/AABEIAAkAEAMBEQACEQEDEQH/xAGiAAABBQEBAQEBAQAAAAAAAAAAAQIDBAUGBwgJCgsQAAIBAwMCBAMFBQQEAAABfQECAwAEEQUSITFBBhNRYQcicRQygZGhCCNCscEVUtHwJDNicoIJChYXGBkaJSYnKCkqNDU2Nzg5OkNERUZHSElKU1RVVldYWVpjZGVmZ2hpanN0dXZ3eHl6g4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2drh4uPk5ebn6Onq8fLz9PX29/j5+gEAAwEBAQEBAQEBAQAAAAAAAAECAwQFBgcICQoLEQACAQIEBAMEBwUEBAABAncAAQIDEQQFITEGEkFRB2FxEyIygQgUQpGhscEJIzNS8BVictEKFiQ04SXxFxgZGiYnKCkqNTY3ODk6Q0RFRkdISUpTVFVWV1hZWmNkZWZnaGlqc3R1dnd4eXqCg4SFhoeIiYqSk5SVlpeYmZqio6Slpqeoqaqys7S1tre4ubrCw8TFxsfIycrS09TV1tfY2dri4+Tl5ufo6ery8/T19vf4+fr/2gAMAwEAAhEDEQA/APMNf+GWh6b4ze3aKFTPaLNcrnBgkYISo/Mn2BAr4PHyqxwtF87jK7vbr2/r5n39BwWJm2vdG6J8P9JufFphtokdoog0KYz5uN3f6c/hXFhJV6lCpFPmlfr/AF8vxOtui8RF9Cv8Wf8Akqmv/S4/9DWvq638GP8AiX6Hz0/4i9C38FP+Sl6V/wBcYP8A0J6Kfw/9vMKPxv0P/9k=",
       "color": {
@@ -4029,7 +4029,7 @@
       "id": "cca9ef0817275178d088474f85eeb7d3",
       "startDate": "20260829",
       "fullStartDate": "202608291600",
-      "endDate": "20260830",
+      "endDate": "20260831",
       "colorHistogram": {
         "version": 1,
         "bins": [
