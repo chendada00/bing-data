@@ -2258,6 +2258,22 @@ async function runCheck(
       continue
     }
 
+
+    // YEAR=2026 时，不要把 2025 等其他年份的 UHD
+    // 误判为本次检查中的孤立文件。
+    if (
+      YEAR !== 'all' &&
+      !date.startsWith(`${YEAR}-`)
+    ) {
+      continue
+    }
+
+    // 如果指定了日期范围，也只检查范围内的 UHD。
+    if (!isDateInRange(date)) {
+      continue
+    }
+
+
     /*
      * 如果日期比历史资料源最新日期还新，
      * 说明很可能是 Bing 每日任务已经提前下载，
