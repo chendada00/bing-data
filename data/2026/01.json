@@ -2,7 +2,7 @@
   "version": 1,
   "year": 2026,
   "month": 1,
-  "updatedAt": "2026-10-09T08:32:36.876Z",
+  "updatedAt": "2026-10-09T08:53:53.514Z",
   "items": [
     {
       "date": "2026-01-01",
@@ -2787,7 +2787,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260121",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -2925,7 +2925,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260122",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3063,7 +3063,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260123",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3201,7 +3201,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260124",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3339,7 +3339,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260125",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3477,7 +3477,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260126",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3615,7 +3615,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260127",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3753,7 +3753,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260128",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -3891,7 +3891,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260129",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -4029,7 +4029,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260130",
       "colorHistogram": {
         "version": 1,
         "bins": [
@@ -4167,7 +4167,7 @@
       "id": "",
       "startDate": "",
       "fullStartDate": "",
-      "endDate": "",
+      "endDate": "20260131",
       "colorHistogram": {
         "version": 1,
         "bins": [
