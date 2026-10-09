@@ -27,6 +27,13 @@ const HISTORY_SOURCE_BASE_URL = (
   process.env.HISTORY_SOURCE_BASE_URL || ''
 ).replace(/\/$/, '')
 
+// 包含 Bing 详细元数据的历史数据源。
+// 文件路径：bing/YYYY/bing_zh-CN.json
+const DETAILED_HISTORY_SOURCE_BASE_URL = (
+  process.env.DETAILED_HISTORY_SOURCE_BASE_URL ||
+  'https://raw.githubusercontent.com/zigou23/Bing-Daily-Wallpaper/main/bing'
+).replace(/\/$/, '')
+
 const UHD_ROOT = path.resolve(
   process.env.UHD_ROOT || '../bing-uhd'
 )
@@ -127,6 +134,57 @@ function normalizeDate(value) {
 
   if (/^\d{8}$/.test(text)) {
     return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+  }
+
+  return null
+}
+
+function getImageIdentity(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return null
+  }
+
+  const match = value.match(/OHR[._]([A-Za-z0-9]+)/i)
+
+  return match ? match[1].toLowerCase() : null
+}
+
+function getDisplayDate(record) {
+  if (!record || typeof record !== 'object') {
+    return null
+  }
+
+  // 官方历史数据优先使用 enddate。
+  // 新数据源的 date 已经是归档的展示日期，不再额外加一天。
+  const endDate = normalizeDate(record.enddate)
+  if (endDate) return endDate
+
+  const archiveDate = normalizeDate(record.date)
+  if (archiveDate) return archiveDate
+
+  // 仅在没有 date/enddate 时，尝试从完整时间推导。
+  // 这里按中国时区 UTC+8 转换。
+  const fullStartDate = String(record.fullstartdate || '')
+  const match = /^(\d{4})(\d{2})(\d{2})(\d{2})(\d{2})$/.exec(
+    fullStartDate
+  )
+
+  if (match) {
+    const timestamp = Date.UTC(
+      Number(match[1]),
+      Number(match[2]) - 1,
+      Number(match[3]),
+      Number(match[4]),
+      Number(match[5])
+    )
+
+    const local = new Date(timestamp + 8 * 60 * 60 * 1000)
+
+    return [
+      local.getUTCFullYear(),
+      String(local.getUTCMonth() + 1).padStart(2, '0'),
+      String(local.getUTCDate()).padStart(2, '0')
+    ].join('-')
   }
 
   return null
@@ -648,42 +706,75 @@ function isValidSourceImage(
   )
 }
 
-function normalizeSourceRecord(
-  record
-) {
+function normalizeSourceRecord(record) {
   if (!record) return null
 
-  const date =
-    normalizeDate(
-      record.date
-    )
-
+  const date = getDisplayDate(record)
   if (!date) return null
+
+  const urlbase =
+    typeof record.urlbase === 'string'
+      ? record.urlbase.trim()
+      : null
+
+  const url =
+    typeof record.url === 'string'
+      ? record.url.trim()
+      : null
+
+  const identity = getImageIdentity(
+    urlbase || url || ''
+  )
 
   return {
     date,
+    identity,
+
     title:
       typeof record.title === 'string'
         ? record.title.trim()
         : '',
+
+    description:
+      typeof record.description === 'string'
+        ? record.description.trim()
+        : '',
+
     copyright:
       typeof record.copyright === 'string'
         ? record.copyright.trim()
         : '',
+
+    copyrightKeyword:
+      typeof record.copyrightKeyword === 'string'
+        ? record.copyrightKeyword.trim()
+        : '',
+
     copyrightLink:
       typeof record.copyrightlink === 'string'
         ? record.copyrightlink.trim()
-        : null,
-    url:
-      typeof record.url === 'string'
-        ? record.url.trim()
-        : null,
-    urlbase:
-      typeof record.urlbase === 'string'
-        ? record.urlbase.trim()
-        : null,
-    uhd:
-      record.uhd === true
+        : (
+            typeof record.copyrightLink === 'string'
+              ? record.copyrightLink.trim()
+              : null
+          ),
+
+    url,
+    urlbase,
+
+    fullstartdate:
+      record.fullstartdate || null,
+
+    startdate:
+      record.startdate || null,
+
+    enddate:
+      record.enddate || null,
+
+    hsh:
+      record.hsh || null,
+
+    uhd: true
   }
 }
 
@@ -698,36 +789,54 @@ async function fetchJson(
   )
 }
 
-async function loadHistorySource(
-  year
-) {
-  if (
-    !HISTORY_SOURCE_BASE_URL
-  ) {
-    fail(
-      'HISTORY_SOURCE_BASE_URL is not configured'
-    )
-  }
-
+async function loadHistorySource(year) {
   const url =
-    `${HISTORY_SOURCE_BASE_URL}/${year}.json`
+    `${DETAILED_HISTORY_SOURCE_BASE_URL}/${year}/bing_zh-CN.json`
 
-  log(
-    `Loading history source: ${url}`
-  )
+  log(`Loading detailed history source: ${url}`)
 
-  const data =
-    await fetchJson(url)
+  try {
+    const data = await fetchJson(url)
 
-  if (!Array.isArray(data)) {
-    throw new Error(
-      `History source is not an array: ${url}`
+    if (!Array.isArray(data)) {
+      throw new Error(`History source is not an array: ${url}`)
+    }
+
+    const normalized = data
+      .map(normalizeSourceRecord)
+      .filter(Boolean)
+
+    log(`Loaded ${normalized.length} detailed records for ${year}`)
+
+    return normalized
+  } catch (error) {
+    log(
+      `Detailed source unavailable for ${year}: ${error.message}`
     )
-  }
 
-  return data
-    .map(normalizeSourceRecord)
-    .filter(Boolean)
+    // 保留原来的历史数据源作为备用。
+    // 备用源没有 description 时，不会凭空生成详细介绍。
+    if (!HISTORY_SOURCE_BASE_URL) {
+      throw error
+    }
+
+    const fallbackUrl =
+      `${HISTORY_SOURCE_BASE_URL}/${year}.json`
+
+    log(`Trying legacy history source: ${fallbackUrl}`)
+
+    const fallbackData = await fetchJson(fallbackUrl)
+
+    if (!Array.isArray(fallbackData)) {
+      throw new Error(
+        `Fallback history source is not an array: ${fallbackUrl}`
+      )
+    }
+
+    return fallbackData
+      .map(normalizeSourceRecord)
+      .filter(Boolean)
+  }
 }
 
 function collectMonthFiles(
@@ -1424,13 +1533,56 @@ async function repairExistingItem(
     changed = true
   }
 
-  if (
-    source.copyright &&
-    item.description !== source.copyright
+  // 详细描述优先使用新数据源的 description。
+  // 没有详细描述时，保留旧描述；只有原描述为空时才使用版权文字兜底。
+  const detailedDescription =
+    typeof source.description === 'string'
+      ? source.description.trim()
+      : ''
+  
+  if (detailedDescription) {
+    if (item.description !== detailedDescription) {
+      item.description = detailedDescription
+      changed = true
+    }
+  
+    if (
+      item.descriptionSource !==
+      'zigou23/Bing-Daily-Wallpaper'
+    ) {
+      item.descriptionSource =
+        'zigou23/Bing-Daily-Wallpaper'
+      changed = true
+    }
+  } else if (
+    !item.description &&
+    source.copyright
   ) {
-    item.description =
-      source.copyright
-
+    item.description = source.copyright
+    changed = true
+  }
+  
+  if (
+    source.copyrightKeyword &&
+    item.copyrightKeyword !== source.copyrightKeyword
+  ) {
+    item.copyrightKeyword = source.copyrightKeyword
+    changed = true
+  }
+  
+  if (
+    source.fullstartdate &&
+    item.fullStartDate !== source.fullstartdate
+  ) {
+    item.fullStartDate = source.fullstartdate
+    changed = true
+  }
+  
+  if (
+    source.enddate &&
+    item.endDate !== source.enddate
+  ) {
+    item.endDate = source.enddate
     changed = true
   }
 
@@ -1630,7 +1782,23 @@ async function createMissingItem(
       source.title || '',
 
     description:
-      source.copyright || '',
+      source.description ||
+      source.copyright ||
+      '',
+    
+    descriptionSource:
+      source.description
+        ? 'zigou23/Bing-Daily-Wallpaper'
+        : null,
+    
+    copyrightKeyword:
+      source.copyrightKeyword || '',
+    
+    fullStartDate:
+      source.fullstartdate || null,
+    
+    endDate:
+      source.enddate || null,
 
     copyright:
       source.copyright || '',
