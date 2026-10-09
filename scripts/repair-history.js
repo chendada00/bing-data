@@ -825,7 +825,7 @@ function normalizeSourceRecord(record) {
       record.hsh || null,
 
     // 不能把所有历史记录都无条件标记为支持 UHD。
-    uhd: record.uhd === true
+    uhd: Boolean(urlbase)
   }
 }
 
