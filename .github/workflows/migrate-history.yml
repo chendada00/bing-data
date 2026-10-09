@@ -18,6 +18,18 @@ on:
         required: true
         default: "2026"
 
+      start_date:
+        description: "开始日期，格式 YYYY-MM-DD；留空表示不限制"
+        required: false
+        default: ""
+        type: string
+
+      end_date:
+        description: "结束日期，格式 YYYY-MM-DD；留空表示不限制"
+        required: false
+        default: ""
+        type: string
+
       max_images:
         description: "Maximum records to process. 0 = unlimited"
         required: true
@@ -109,6 +121,8 @@ jobs:
         env:
           MODE: ${{ inputs.mode }}
           YEAR: ${{ inputs.year }}
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
           MAX_IMAGES: ${{ inputs.max_images }}
           FORCE_UHD: ${{ inputs.force_uhd }}
           UHD_ROOT: bing-uhd
