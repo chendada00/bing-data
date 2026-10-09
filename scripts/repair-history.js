@@ -74,6 +74,8 @@ const COLOR_KEYS = [
   'LightMuted'
 ]
 
+
+
 function isDateInRange(date) {
   const normalized = normalizeDate(date)
 
@@ -2123,38 +2125,7 @@ async function runRepair(
           )
       )
 
-  if (
-    START_DATE &&
-    END_DATE &&
-    START_DATE > END_DATE
-  ) {
-    fail(
-      `START_DATE cannot be later than END_DATE: ${START_DATE} > ${END_DATE}`
-    )
-  }
-
-
-
-
-if (
-  START_DATE &&
-  YEAR !== 'all' &&
-  !START_DATE.startsWith(`${YEAR}-`)
-) {
-  fail(
-    `START_DATE ${START_DATE} does not belong to YEAR=${YEAR}`
-  )
-}
-
-if (
-  END_DATE &&
-  YEAR !== 'all' &&
-  !END_DATE.startsWith(`${YEAR}-`)
-) {
-  fail(
-    `END_DATE ${END_DATE} does not belong to YEAR=${YEAR}`
-  )
-}
+ 
 
 
   for (
@@ -2451,7 +2422,42 @@ async function runSwitchImageUrl(
   )
 }
 
+
+
 async function main() {
+ if (
+    START_DATE &&
+    END_DATE &&
+    START_DATE > END_DATE
+  ) {
+    fail(
+      `START_DATE cannot be later than END_DATE: ${START_DATE} > ${END_DATE}`
+    )
+  }
+
+
+  if (
+    START_DATE &&
+    YEAR !== 'all' &&
+    !START_DATE.startsWith(`${YEAR}-`)
+  ) {
+    fail(
+      `START_DATE ${START_DATE} does not belong to YEAR=${YEAR}`
+    )
+  }
+  
+  if (
+    END_DATE &&
+    YEAR !== 'all' &&
+    !END_DATE.startsWith(`${YEAR}-`)
+  ) {
+    fail(
+      `END_DATE ${END_DATE} does not belong to YEAR=${YEAR}`
+    )
+  }
+
+
+  
   if (
     !PREVIEW_BASE_URL
   ) {
