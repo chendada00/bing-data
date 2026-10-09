@@ -27,13 +27,6 @@ const HISTORY_SOURCE_BASE_URL = (
   process.env.HISTORY_SOURCE_BASE_URL || ''
 ).replace(/\/$/, '')
 
-// 包含 Bing 详细元数据的历史数据源。
-// 文件路径：bing/YYYY/bing_zh-CN.json
-const DETAILED_HISTORY_SOURCE_BASE_URL = (
-  process.env.DETAILED_HISTORY_SOURCE_BASE_URL ||
-  'https://raw.githubusercontent.com/zigou23/Bing-Daily-Wallpaper/main/bing'
-).replace(/\/$/, '')
-
 const UHD_ROOT = path.resolve(
   process.env.UHD_ROOT || '../bing-uhd'
 )
@@ -706,49 +699,53 @@ function isValidSourceImage(
   )
 }
 
-function normalizeSourceRecord(record) {
-  if (!record) return null
 
+function normalizeSourceRecord(record) {
+  if (!record || typeof record !== 'object') {
+    return null
+  }
+
+  // 源仓库的 date 格式为 YYYYMMDD。
   const date = getDisplayDate(record)
-  if (!date) return null
+
+  if (!date) {
+    return null
+  }
 
   const urlbase =
     typeof record.urlbase === 'string'
       ? record.urlbase.trim()
-      : null
+      : ''
 
   const url =
     typeof record.url === 'string'
       ? record.url.trim()
-      : null
+      : ''
 
-  const identity = getImageIdentity(
-    urlbase || url || ''
-  )
+  if (!urlbase) {
+    return null
+  }
 
   return {
     date,
-    identity,
+
+    identity: getImageIdentity(urlbase || url),
 
     title:
       typeof record.title === 'string'
         ? record.title.trim()
         : '',
 
-    description:
-      typeof record.description === 'string'
-        ? record.description.trim()
-        : '',
+    // 源仓库暂时不提供 description。
+    // 不依赖其他仓库的描述信息。
+    description: '',
 
     copyright:
       typeof record.copyright === 'string'
         ? record.copyright.trim()
         : '',
 
-    copyrightKeyword:
-      typeof record.copyrightKeyword === 'string'
-        ? record.copyrightKeyword.trim()
-        : '',
+    copyrightKeyword: '',
 
     copyrightLink:
       typeof record.copyrightlink === 'string'
@@ -774,9 +771,11 @@ function normalizeSourceRecord(record) {
     hsh:
       record.hsh || null,
 
-    uhd: true
+    // 不能把所有历史记录都无条件标记为支持 UHD。
+    uhd: record.uhd === true
   }
 }
+
 
 async function fetchJson(
   url
@@ -789,55 +788,38 @@ async function fetchJson(
   )
 }
 
+
 async function loadHistorySource(year) {
   const url =
-    `${DETAILED_HISTORY_SOURCE_BASE_URL}/${year}/bing_zh-CN.json`
+    `${HISTORY_SOURCE_BASE_URL}/${year}.json`
 
-  log(`Loading detailed history source: ${url}`)
+  log(`Loading history source: ${url}`)
 
-  try {
-    const data = await fetchJson(url)
+  const data = await fetchJson(url)
 
-    if (!Array.isArray(data)) {
-      throw new Error(`History source is not an array: ${url}`)
-    }
-
-    const normalized = data
-      .map(normalizeSourceRecord)
-      .filter(Boolean)
-
-    log(`Loaded ${normalized.length} detailed records for ${year}`)
-
-    return normalized
-  } catch (error) {
-    log(
-      `Detailed source unavailable for ${year}: ${error.message}`
+  if (!Array.isArray(data)) {
+    throw new Error(
+      `History source is not an array: ${url}`
     )
-
-    // 保留原来的历史数据源作为备用。
-    // 备用源没有 description 时，不会凭空生成详细介绍。
-    if (!HISTORY_SOURCE_BASE_URL) {
-      throw error
-    }
-
-    const fallbackUrl =
-      `${HISTORY_SOURCE_BASE_URL}/${year}.json`
-
-    log(`Trying legacy history source: ${fallbackUrl}`)
-
-    const fallbackData = await fetchJson(fallbackUrl)
-
-    if (!Array.isArray(fallbackData)) {
-      throw new Error(
-        `Fallback history source is not an array: ${fallbackUrl}`
-      )
-    }
-
-    return fallbackData
-      .map(normalizeSourceRecord)
-      .filter(Boolean)
   }
+
+  const normalized = data
+    .map(normalizeSourceRecord)
+    .filter(Boolean)
+
+  // 只对源仓库明确标记支持 UHD 的记录执行修复。
+  const uhdRecords = normalized.filter(
+    record => record.uhd === true
+  )
+
+  log(
+    `Loaded ${normalized.length} records for ${year}; ` +
+    `${uhdRecords.length} support UHD`
+  )
+
+  return uhdRecords
 }
+
 
 function collectMonthFiles(
   dir
@@ -1906,19 +1888,49 @@ function getYearsFromLocal(
   ).sort()
 }
 
-async function getTargetYears(
-  local
-) {
-  if (
-    /^\d{4}$/.test(YEAR)
-  ) {
+
+async function getTargetYears(local) {
+  // 指定年份时，仍然只处理该年份。
+  if (/^\d{4}$/.test(YEAR)) {
     return [YEAR]
   }
 
-  return getYearsFromLocal(
-    local
-  )
+  // YEAR=all 时，从源仓库的 data 目录发现年份，
+  // 不再依赖本地已经存在的月份 JSON。
+  const url =
+    'https://api.github.com/repos/' +
+    'ygnstudio/bing_wallpaper_archive/contents/data?ref=main'
+
+  log(`Discovering source years: ${url}`)
+
+  const entries = await fetchJson(url)
+
+  if (!Array.isArray(entries)) {
+    throw new Error(
+      'Unable to list history source data directory'
+    )
+  }
+
+  const years = entries
+    .filter(entry =>
+      entry &&
+      entry.type === 'file' &&
+      /^\d{4}\.json$/.test(entry.name)
+    )
+    .map(entry => entry.name.slice(0, 4))
+    .sort()
+
+  if (years.length === 0) {
+    throw new Error(
+      'No yearly JSON files found in history source'
+    )
+  }
+
+  log(`Discovered source years: ${years.join(', ')}`)
+
+  return years
 }
+
 
 function reportItem(
   date,
