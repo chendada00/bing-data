@@ -5,7 +5,7 @@
       "headers": [
         {
           "key": "Access-Control-Allow-Origin",
-          "value": "https://bing.xn--xpqp35o.cn"
+          "value": "*"
         },
         {
           "key": "Access-Control-Allow-Methods",
