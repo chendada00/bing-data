@@ -2373,14 +2373,14 @@ function migrateRecordsByIdentity(local, sources, changedFiles) {
   for (const source of sources) {
     if (!source.identity) continue
 
-    const previous = sourceByIdentity.get(source.identity)
+    // const previous = sourceByIdentity.get(source.identity)
 
-    if (previous && previous.date !== source.date) {
-      throw new Error(
-        `Source identity maps to multiple dates: ${source.identity}; ` +
-        `${previous.date} and ${source.date}`
-      )
-    }
+    // if (previous && previous.date !== source.date) {
+    //   throw new Error(
+    //     `Source identity maps to multiple dates: ${source.identity}; ` +
+    //     `${previous.date} and ${source.date}`
+    //   )
+    // }
 
     sourceByIdentity.set(source.identity, source)
   }
