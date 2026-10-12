@@ -1,99 +1,91 @@
-# Bing Wallpaper Data
+<div align="center">
 
-Bing Wallpaper 收藏系统的数据仓库。
+# 🗂️ Bing Wallpaper Data
 
-本仓库负责保存 Bing 每日壁纸的结构化数据、预览图、颜色分析数据以及历史搜索索引。
+**Bing 每日壁纸收藏系统的数据与预览资源仓库**
 
-整个项目由三个仓库组成：
+[![Data](https://img.shields.io/badge/Data-JSON-5b8def)](https://github.com/chendada00/bing-data)
+[![Automation](https://img.shields.io/badge/Automation-GitHub_Actions-2088ff?logo=githubactions&logoColor=white)](https://github.com/chendada00/bing-data/actions)
+[![License](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
 
-- `bing-wallpaper`：前端网站
-- `bing-data`：数据与预览资源
-- `bing-uhd`：UHD 高清原图
+🌐 **网站：** [bing.伴随.cn](https://bing.伴随.cn)  
+🗂️ **数据服务：** [bing-data.伴随.cn](https://bing-data.伴随.cn)  
+🖥️ **UHD 图片：** [bing-uhd.伴随.cn](https://bing-uhd.伴随.cn)
 
-在线网站：
+</div>
 
-**https://bing.伴随.cn**
+------------------------------------------------------------------------
 
-数据地址：
+## 📌 仓库简介
 
-**https://bing-data.伴随.cn**
+`bing-data` 是 Bing Wallpaper
+收藏系统的数据仓库，负责保存结构化壁纸信息、历史索引、预览图片以及图片分析结果。UHD
+高清原图已经拆分到独立的
+[`bing-uhd`](https://github.com/chendada00/bing-uhd) 仓库中。
 
-UHD 图片地址：
+整个系统由三个仓库组成：
 
-**https://bing-uhd.伴随.cn**
+| 仓库                                                             | 主要职责                                       |
+|------------------------------------------------------------------|------------------------------------------------|
+| [`bing-wallpaper`](https://github.com/chendada00/bing-wallpaper) | 前端网站                                       |
+| **`bing-data`**                                                  | 月度 JSON、历史索引、预览图、Base64 与颜色数据 |
+| [`bing-uhd`](https://github.com/chendada00/bing-uhd)             | UHD 高清原图                                   |
 
----
+## 🧰 本仓库保存什么
 
-## 仓库职责
+- 🧾 每日壁纸元数据与月度 JSON
+- 🔎 `data/index.json` 历史搜索索引
+- 🖼️ `preview/` 预览图
+- 🫧 小尺寸 JPEG 的 Base64 数据
+- 🎨 图片主色调信息
+- 🌈 HSV 颜色直方图
+- 📐 图片宽度与高度等元数据
 
-本仓库主要保存：
+**本仓库不负责保存 UHD 高清原图。** 高清镜像统一位于
+`chendada00/bing-uhd`。
 
-- Bing 每日壁纸元数据
-- 月度 JSON
-- `data/index.json`
-- preview 预览图
-- Base64 缩略图
-- 主色调
-- HSV 颜色直方图
-- 壁纸尺寸
-- Bing 原始信息
+## 📁 目录结构
 
-本仓库**不再保存 UHD 高清原图**。
-
-UHD 高清原图统一存放在：
-
-```text
-chendada00/bing-uhd
-```
-
----
-
-## 目录结构
-
-```text
+``` text
 bing-data/
-│
 ├── data/
 │   ├── index.json
-│   └── YYYY/
-│       ├── 01.json
-│       ├── 02.json
+│   ├── 2026/
+│   │   ├── 01.json
+│   │   ├── 02.json
+│   │   └── ...
+│   └── 2025/
 │       └── ...
-│
 ├── preview/
 │   └── YYYY/
 │       └── MM/
 │           └── YYYY-MM-DD.jpg
-│
 ├── scripts/
 │   ├── update-bing.js
 │   ├── repair-history.js
 │   ├── color-histogram.js
 │   └── index.js
-│
 ├── .github/
 │   └── workflows/
-│
+│       └── update-bing.yml
+├── _headers
 └── README.md
 ```
 
----
+> 目录中的历史年份和月份会随着数据更新继续增加；以上为结构示意。
 
-## 月度 JSON
+## 📦 月度 JSON 数据
 
-历史壁纸按照月份保存。
+壁纸按年份和月份保存，例如：
 
-例如：
-
-```text
+``` text
 data/2026/09.json
 ```
 
-每个月包含该月的壁纸记录。
+每个文件通常是一个对象，包含 `year`、`month` 和
+`items`。单条壁纸记录可能包含以下字段：
 
-典型记录：
-
-```json
+``` json
 {
   "date": "2026-09-23",
   "title": "Example title",
@@ -102,314 +94,191 @@ data/2026/09.json
   "copyrightLink": "https://example.com",
   "image": "https://bing-uhd.伴随.cn/images/2026/09/2026-09-23.jpg",
   "preview": "https://bing-data.伴随.cn/preview/2026/09/2026-09-23.jpg",
-  "sourceImage": "https://www.bing.com/..._UHD.jpg",
+  "sourceImage": "https://www.bing.com/...",
   "base64": "data:image/jpeg;base64,...",
   "color": {},
-  "colorHistogram": {},
+  "colorHistogram": {
+    "version": 1,
+    "bins": []
+  },
   "width": 3840,
   "height": 2160
 }
 ```
 
----
+上面是字段示例，不代表每条历史记录都必然包含所有字段。历史数据修复脚本会用于检查和补齐支持的缺失数据。
 
-## 图片地址设计
+## 🖼️ 图片地址字段
 
-项目将高清图片和预览图片分开保存。
+| 字段          | 含义                    | 典型用途                     |
+|---------------|-------------------------|------------------------------|
+| `preview`     | 数据仓库中的预览图地址  | 首页卡片与普通浏览           |
+| `image`       | 项目维护的 UHD 镜像地址 | 高清查看或下载的备用来源     |
+| `sourceImage` | Bing 官方原图地址       | 优先尝试获取官方 UHD 原图    |
+| `base64`      | 小尺寸 JPEG 的 Data URL | 模糊占位、首页背景等视觉效果 |
 
-### `preview`
+典型地址形式：
 
-网站首页和普通浏览使用的预览图：
-
-```text
+``` text
+预览图：
 https://bing-data.伴随.cn/preview/YYYY/MM/YYYY-MM-DD.jpg
-```
 
-### `image`
-
-项目自己的 UHD 高清镜像：
-
-```text
+UHD 镜像：
 https://bing-uhd.伴随.cn/images/YYYY/MM/YYYY-MM-DD.jpg
 ```
 
-### `sourceImage`
+`base64` 不是 UHD 原图，也不应该用作高清下载资源。
 
-Bing 官方 UHD 原图地址。
+## 🎨 主色调与颜色直方图
 
-例如：
+### `color`
 
-```text
-https://www.bing.com/..._UHD.jpg
+保存图片主色调分析结果，可供前端进行颜色展示和颜色搜索等操作。具体对象结构以生成脚本与当前数据为准。
+
+### `colorHistogram`
+
+保存 HSV 颜色分布。当前版本使用以下分桶配置：
+
+``` text
+Hue（色相）             12 桶
+Saturation（饱和度）     3 桶
+Value（明度）            3 桶
+
+12 × 3 × 3 = 108 个区域
 ```
 
-三者职责不同：
+`bins`
+中保存归一化后的区域统计值。它描述整张图片的颜色组成，而不是图片中的空间坐标：`bins[0]`
+不代表原图左上角。
 
-```text
-preview
-    ↓
-网页浏览
+## 🔎 历史索引 `data/index.json`
 
-image
-    ↓
-稳定的 UHD 镜像
+索引用于支持前端全历史搜索。索引采用轻量级结构，典型内容如下：
 
-sourceImage
-    ↓
-Bing 官方原始来源
+``` json
+{
+  "version": 1,
+  "updatedAt": "2026-09-23T00:00:00.000Z",
+  "items": [
+    [
+      "2026-09-23",
+      "Example title",
+      "Example description"
+    ]
+  ]
+}
 ```
 
----
+每个索引条目依次保存：
 
-## Base64
+1.  日期
+2.  标题
+3.  描述
 
-每张壁纸保存一个小尺寸 Base64 JPEG。
+前端先在索引中查找符合条件的日期，再按月份加载完整
+JSON，而不是一次性下载全部历史数据。
 
-主要用途：
+## 🔄 自动更新
 
-- 快速模糊占位
-- 首页背景
-- 避免页面初始渲染时等待完整图片
+每日壁纸更新由 GitHub Actions 工作流执行，工作流文件为：
 
-Base64 不是 UHD 图片，也不是下载资源。
-
----
-
-## 主色调
-
-`color` 保存图片主色调分析结果。
-
-主要用于：
-
-- 页面视觉效果
-- 主色调展示
-- 颜色搜索
-- 颜色复制
-
----
-
-## Color Histogram
-
-`colorHistogram` 保存图片的 HSV 颜色分布。
-
-当前版本：
-
-```text
-Hue        12
-Saturation 3
-Value      3
-
-12 × 3 × 3
-= 108
+``` text
+.github/workflows/update-bing.yml
 ```
 
-因此每张图片包含：
+当前工作流配置了定时触发和手动触发。其基本流程如下：
 
-```text
-108 个颜色区域
-```
-
-这些数据描述整张图片的颜色组成。
-
-它不是图片的空间坐标。
-
-例如：
-
-```text
-bins[0]
-```
-
-并不表示：
-
-```text
-图片左上角
-```
-
-而表示一个特定 HSV 颜色区域。
-
----
-
-## 历史索引
-
-```text
-data/index.json
-```
-
-用于全历史搜索。
-
-索引只保存轻量级字段：
-
-```text
-日期
-标题
-描述
-```
-
-前端首先搜索：
-
-```text
-index.json
-```
-
-然后根据命中的日期加载对应月份 JSON。
-
-这样可以避免前端一次加载全部历史数据。
-
----
-
-## 数据更新
-
-每日壁纸通过 GitHub Actions 自动处理。
-
-基本流程：
-
-```text
-Bing
- ↓
-获取每日壁纸信息
- ↓
-获取 UHD 原图
- ↓
-保存 UHD 到 bing-uhd
- ↓
-生成 preview
- ↓
-生成 Base64
- ↓
-生成主色调
- ↓
-生成颜色直方图
- ↓
+``` text
+获取 Bing 每日壁纸信息
+          ↓
+获取 UHD 图片
+          ↓
+写入 bing-uhd/images/
+          ↓
+生成 preview 与 Base64
+          ↓
+提取主色调与 HSV 颜色直方图
+          ↓
 更新月度 JSON
- ↓
-更新 index.json
- ↓
-提交仓库
+          ↓
+重建 data/index.json
+          ↓
+提交更新
 ```
 
----
+工作流的实际执行时间以 GitHub Actions 中的 cron
+配置为准；定时任务也可能受到 GitHub Actions 调度延迟影响。
 
-## 历史数据修复
+### GitHub Actions 配置
 
-历史数据统一通过：
+工作流需要能够读取本仓库代码，并将 UHD 图片写入 `chendada00/bing-uhd`：
 
-```text
-.github/workflows/migrate-history.yml
+- 在 `bing-data` 仓库的 **Settings → Secrets and variables → Actions**
+  中配置 `BING_UHD_TOKEN`。
+- Token 需要具备对 `chendada00/bing-uhd`
+  执行检出、提交和推送所需的权限；建议仅授予必要仓库与权限。
+- 仓库根目录需要有工作流读取的 `.env` 配置，其中包含：
+
+``` dotenv
+# preview 图片的公开根地址
+PREVIEW_BASE_URL=https://bing-data.伴随.cn
+
+# UHD 镜像的公开根地址
+IMAGE_BASE_URL=https://bing-uhd.伴随.cn
 ```
 
-以及：
+上述地址用于生成写入 JSON 的资源 URL。请按实际域名调整，不要在公开
+README 或日志中放入 Token。
 
-```text
-scripts/repair-history.js
+## 🧰 数据维护脚本
+
+| 脚本                         | 用途                                   |
+|------------------------------|----------------------------------------|
+| `scripts/update-bing.js`     | 获取并处理每日壁纸，生成数据与预览资源 |
+| `scripts/repair-history.js`  | 检查和修复历史记录及相关图片数据       |
+| `scripts/color-histogram.js` | 生成 HSV 颜色直方图                    |
+| `scripts/index.js`           | 根据月度 JSON 重建历史搜索索引         |
+
+运行脚本前，请先检查脚本实际需要的参数、环境变量和工作目录。历史修复脚本可能修改多个月份的数据，建议在执行前备份仓库并先检查运行日志。
+
+## 🌐 静态托管与缓存
+
+本仓库可以作为静态资源部署到支持静态文件托管的服务，并通过
+`bing-data.伴随.cn` 提供 JSON 和预览图。
+
+根目录 `_headers` 用于配置部分响应头，当前包含：
+
+- 公共跨域访问响应头
+- 预览图的较长缓存时间
+- `data/index.json` 的较短缓存时间
+- 月度 JSON 的缓存策略
+
+不同托管平台对 `_headers`
+的支持可能不同。若部署平台不识别该文件，需要在平台对应的规则配置中设置
+CORS 与 Cache-Control。
+
+## 🧪 本地维护
+
+本仓库的更新流程主要由 GitHub Actions
+执行。脚本依赖以工作流中的安装步骤为准；例如每日处理工作流会安装 `jimp`
+与 `node-vibrant` 等图像处理依赖。
+
+``` bash
+git clone https://github.com/chendada00/bing-data.git
+cd bing-data
 ```
 
-进行检查和修复。
+运行具体脚本前，请先阅读对应脚本与工作流，确认所需环境变量、`bing-uhd`
+仓库检出路径和权限配置。
 
-可以检查：
+## 🔗 相关链接
 
-- 缺少数据记录
-- 数据字段不完整
-- 缺少 UHD
-- UHD 图片无效
-- preview 缺失
-- Base64 缺失
-- 主色调缺失
-- 颜色直方图缺失
-- 图片尺寸错误
-- 官方 UHD 地址错误
+- 🌐 [在线网站](https://bing.伴随.cn)
+- 🖥️ [bing-wallpaper
+  前端仓库](https://github.com/chendada00/bing-wallpaper)
+- 🗂️ [bing-data 数据仓库](https://github.com/chendada00/bing-data)
+- 🖼️ [bing-uhd 高清图片仓库](https://github.com/chendada00/bing-uhd)
 
----
+## 📄 License
 
-## UHD 高清图片
-
-UHD 图片不再保存于本仓库的 `images/` 目录。
-
-所有 UHD 原图统一存放：
-
-```text
-chendada00/bing-uhd
-```
-
-目录结构：
-
-```text
-images/
-└── YYYY/
-    └── MM/
-        └── YYYY-MM-DD.jpg
-```
-
-目标尺寸通常为：
-
-```text
-3840 × 2160
-```
-
----
-
-## 数据与前端
-
-前端仓库：
-
-```text
-chendada00/bing-wallpaper
-```
-
-通过：
-
-```text
-https://bing-data.伴随.cn
-```
-
-读取本仓库的数据。
-
-在线网站：
-
-```text
-https://bing.伴随.cn
-```
-
----
-
-## 三个仓库
-
-### bing-wallpaper
-
-前端网站：
-
-```text
-https://bing.伴随.cn
-```
-
-负责：
-
-- 页面展示
-- 搜索
-- 历史浏览
-- 高清查看
-- 下载
-- SEO
-
-### bing-data
-
-本仓库。
-
-负责：
-
-- JSON 数据
-- preview
-- Base64
-- 颜色分析
-- 历史索引
-
-### bing-uhd
-
-负责：
-
-- UHD 高清原图
-
----
-
-## License
-
-MIT
+本仓库使用 MIT License，详见仓库中的 `LICENSE` 文件。
