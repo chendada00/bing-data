@@ -6,10 +6,6 @@ const http = require('http')
 const Jimp = require('jimp')
 const Vibrant = require('node-vibrant')
 
-const {
-  fetchDescription,
-  isUsableDescription
-} = require('./bing-description')
 
 const {
   getColorHistogram,
@@ -985,37 +981,18 @@ async function main() {
     sourceImage
   } = await fetchBingMetadata()
 
-  /*
-   * 2. 获取真正的壁纸描述。
-   * 失败时不使用 copyright 或搜索页宣传文案冒充描述。
-   */
   let officialDescription = null
 
   try {
-    officialDescription = await fetchDescription(
-      date,
-      bing.copyright || ''
+    officialDescription = await fetchOfficialDescription(
+      bing,
+      date
     )
-
-    if (
-      !isUsableDescription(
-        officialDescription,
-        bing.copyright || ''
-      )
-    ) {
-      officialDescription = null
-    }
-
-    if (officialDescription) {
-      log(`已获取官方壁纸描述：${date}`)
-    } else {
-      log(`未找到匹配的官方壁纸描述：${date}`)
-    }
   } catch (error) {
-    log(`获取壁纸描述失败：${error.message}`)
+    log(`获取官方故事描述失败：${error.message}`)
   }
 
-
+  
   const year =
     date.slice(0, 4)
 
@@ -1186,15 +1163,8 @@ async function main() {
 
     description:
       officialDescription ||
-      (
-        existing?.description &&
-        isUsableDescription(
-          existing.description,
-          existing.copyright || ''
-        )
-          ? existing.description
-          : ''
-      ),
+      existing?.description ||
+      '',
     copyright:
       bing.copyright ||
       existing?.copyright ||
