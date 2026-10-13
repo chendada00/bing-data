@@ -754,6 +754,136 @@ async function fetchBingMetadata() {
   }
 }
 
+
+
+
+/**
+ * 从必应官方主页模型中获取当前壁纸的故事描述。
+ *
+ * 重要：
+ * 1. HPImageArchive 只负责提供壁纸基础元数据。
+ * 2. 官方主页模型中的故事描述位于 ImageContent.Description。
+ * 3. 必须用图片 ID 精确匹配，不能直接拿第一条描述。
+ */
+function normalizeBingImageId(value) {
+  if (!value) return null
+
+  let raw = String(value).trim()
+
+  try {
+    const parsed = new URL(raw, 'https://www.bing.com')
+    raw = parsed.searchParams.get('id') || raw
+  } catch {
+    // 保留原始字符串，继续尝试提取图片 ID。
+  }
+
+  try {
+    raw = decodeURIComponent(raw)
+  } catch {
+    // 原字符串无法解码时继续使用原值。
+  }
+
+  const match = raw.match(/OHR\.[^&?]+/i)
+
+  if (!match) return null
+
+  return match[0].replace(
+    /_(?:\d{3,4}x\d{3,4}|UHD)(?:\.jpg)?$/i,
+    ''
+  )
+}
+
+/**
+ * 从官方主页模型中提取故事描述。
+ */
+async function fetchOfficialDescription(bing, date) {
+  const apiUrl =
+    'https://cn.bing.com/hp/api/model?mkt=zh-CN'
+
+  log(`正在获取必应官方故事描述：${date}`)
+
+  const buffer = await requestBuffer(apiUrl)
+
+  let model
+
+  try {
+    model = JSON.parse(buffer.toString('utf8'))
+  } catch (error) {
+    throw new Error(
+      `官方主页模型 JSON 解析失败：${error.message}`
+    )
+  }
+
+  if (!model || typeof model !== 'object') {
+    throw new Error('官方主页模型返回了无效数据')
+  }
+
+  const wantedId = normalizeBingImageId(
+    bing.urlbase || bing.url
+  )
+
+  if (!wantedId) {
+    throw new Error(
+      `无法从 Bing 图片地址解析图片 ID：${date}`
+    )
+  }
+
+  const contents = [
+    ...(Array.isArray(model.MediaContents)
+      ? model.MediaContents
+      : []),
+    ...(Array.isArray(model.PreloadMediaContents)
+      ? model.PreloadMediaContents
+      : [])
+  ]
+
+  const matched = contents.find(content => {
+    const imageUrl =
+      content?.ImageContent?.Image?.Url ||
+      content?.Image?.Url ||
+      ''
+
+    const imageId = normalizeBingImageId(imageUrl)
+
+    return imageId && imageId === wantedId
+  })
+
+  if (!matched) {
+    throw new Error(
+      `官方主页模型中没有找到当前图片：${wantedId}`
+    )
+  }
+
+  const description = String(
+    matched?.ImageContent?.Description ||
+    matched?.Description ||
+    ''
+  ).trim()
+
+  if (!description) {
+    throw new Error(
+      `官方模型找到了图片，但没有返回故事描述：${date}`
+    )
+  }
+
+  if (
+    description.length < 20 ||
+    description === String(bing.copyright || '').trim() ||
+    /通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
+      description
+    )
+  ) {
+    throw new Error(
+      `官方模型返回的内容不是有效故事描述：${date}`
+    )
+  }
+
+  log(`已获取官方故事描述：${date}`)
+
+  return description
+}
+
+
 /**
  * 从已有 bing-uhd 文件读取图片。
  *
@@ -1163,8 +1293,16 @@ async function main() {
 
     description:
       officialDescription ||
-      existing?.description ||
-      '',
+      (
+        existing?.description &&
+        existing.description !== existing.copyright &&
+        !/通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
+          existing.description
+        )
+          ? existing.description
+          : ''
+      ),
+
     copyright:
       bing.copyright ||
       existing?.copyright ||
