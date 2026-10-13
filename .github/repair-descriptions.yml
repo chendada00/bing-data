@@ -1,0 +1,105 @@
+
+name: Repair Wallpaper Descriptions
+
+on:
+  workflow_dispatch:
+    inputs:
+      year:
+        description: 'Year to repair, or all'
+        required: true
+        default: 'all'
+        type: string
+
+      start_date:
+        description: 'Start date (YYYY-MM-DD, optional)'
+        required: false
+        type: string
+
+      end_date:
+        description: 'End date (YYYY-MM-DD, optional)'
+        required: false
+        type: string
+
+      limit:
+        description: 'Maximum number of records; 0 means unlimited'
+        required: true
+        default: '0'
+        type: string
+
+      force:
+        description: 'Refetch all descriptions in the selected range'
+        required: true
+        default: false
+        type: boolean
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bing-description-repair
+  cancel-in-progress: false
+
+jobs:
+  repair:
+    name: Repair descriptions
+    runs-on: ubuntu-latest
+
+    env:
+      TZ: Asia/Shanghai
+      YEAR: ${{ inputs.year }}
+      START_DATE: ${{ inputs.start_date }}
+      END_DATE: ${{ inputs.end_date }}
+      LIMIT: ${{ inputs.limit }}
+      FORCE: ${{ inputs.force }}
+
+    steps:
+      - name: Checkout bing-data
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1
+
+      - name: Validate inputs
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ "$YEAR" != "all" && ! "$YEAR" =~ ^[0-9]{4}$ ]]; then
+            echo "::error::YEAR must be all or a four-digit year"
+            exit 1
+          fi
+
+          if [[ "$LIMIT" != "0" && ! "$LIMIT" =~ ^[0-9]+$ ]]; then
+            echo "::error::LIMIT must be a non-negative integer"
+            exit 1
+          fi
+
+      - name: Repair descriptions
+        run: node scripts/repair-descriptions.js
+
+      - name: Commit changes
+        if: always()
+        run: |
+          set -e
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add data/
+
+          if git diff --cached --quiet; then
+            echo "No data changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Repair Bing wallpaper descriptions"
+          git push origin HEAD:${GITHUB_REF_NAME}

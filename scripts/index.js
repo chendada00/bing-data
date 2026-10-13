@@ -59,7 +59,7 @@ function buildIndex() {
       unique.set(item.date, [
         item.date,
         cleanText(item.title),
-        cleanText(item.description || item.copyright)
+        cleanText(item.description)
       ])
     }
   }

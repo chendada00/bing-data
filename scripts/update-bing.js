@@ -7,6 +7,11 @@ const Jimp = require('jimp')
 const Vibrant = require('node-vibrant')
 
 const {
+  fetchDescription,
+  isUsableDescription
+} = require('./bing-description')
+
+const {
   getColorHistogram,
   isValidColorHistogram
 } = require('./color-histogram')
@@ -970,6 +975,26 @@ async function main() {
     '========== Bing wallpaper update =========='
   )
 
+  let officialDescription = null
+
+  try {
+    officialDescription = await fetchDescription(
+      date,
+      bing.copyright || ''
+    )
+  } catch (error) {
+    log(`Description fetch failed: ${error.message}`)
+  }
+
+  if (
+    !isUsableDescription(
+      officialDescription,
+      bing.copyright || ''
+    )
+  ) {
+    officialDescription = null
+  }
+
   /*
    * 1. 获取 Bing 当前真正发布的壁纸。
    *
@@ -1152,9 +1177,21 @@ async function main() {
       '',
 
     description:
-      bing.copyright ||
-      existing?.description ||
-      '',
+      officialDescription ||
+      (
+        existing?.description &&
+        existing.descriptionSource &&
+        existing.descriptionSource !== 'bing-copyright'
+          ? existing.description
+          : ''
+      ),
+
+    descriptionSource:
+      officialDescription
+        ? 'bing-story-page'
+        : (
+            existing?.descriptionSource || null
+          ),
 
     copyright:
       bing.copyright ||
