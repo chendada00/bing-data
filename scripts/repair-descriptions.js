@@ -13,7 +13,22 @@ const START_DATE = process.env.START_DATE || ''
 const END_DATE = process.env.END_DATE || ''
 const LIMIT = Number(process.env.LIMIT || 0)
 const FORCE = process.env.FORCE === 'true'
-const DELAY_MS = Number(process.env.DELAY_MS || 1200)
+const DELAY_MS = Number(process.env.DELAY_MS || 1000)
+
+const SOURCES = [
+  {
+    name: 'Bing-Daily-Wallpaper 当前归档',
+    url: 'https://raw.githubusercontent.com/zigou23/Bing-Daily-Wallpaper/main/bing/bing_zh-CN.json'
+  },
+  {
+    name: 'Bing-Daily-Wallpaper 历史归档',
+    url: 'https://raw.githubusercontent.com/zigou23/Bing-Daily-Wallpaper/main/bing/old-2408/bing_zh-CN.json'
+  },
+  {
+    name: 'Bing-Wallpaper-Archive',
+    url: 'https://raw.githubusercontent.com/npanuhin/Bing-Wallpaper-Archive/master/api/CN/zh.json'
+  }
+]
 
 function sleep(ms) {
   return new Promise(resolve => setTimeout(resolve, ms))
@@ -22,80 +37,52 @@ function sleep(ms) {
 function normalizeDate(value) {
   const text = String(value || '').trim()
 
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text
-  }
-
   if (/^\d{8}$/.test(text)) {
     return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
   }
 
-  return null
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
+    return text
+  }
+
+  return ''
 }
 
-/**
- * Bing 的 enddate 是壁纸展示日期；
- * 故事页 HpDate 通常使用 fullstartdate 对应的日期。
- *
- * 优先读取记录中的 fullStartDate / fullstartdate，
- * 如果不存在，则按展示日期减一天计算。
- */
-function getStoryDate(item, displayDate) {
-  const fullStartDate =
-    item.fullStartDate ||
-    item.fullstartdate ||
+function normalizeImageId(value) {
+  if (!value) return ''
+
+  let raw = String(value).trim()
+
+  try {
+    const parsed = new URL(raw, 'https://www.bing.com')
+    raw = parsed.searchParams.get('id') || raw
+  } catch {
+    // 继续尝试原始字符串。
+  }
+
+  try {
+    raw = decodeURIComponent(raw)
+  } catch {
+    // 保留原始值。
+  }
+
+  const match = raw.match(/OHR\.[^&?]+/i)
+  if (!match) return ''
+
+  return match[0].replace(
+    /_(?:\d{3,4}x\d{3,4}|UHD)(?:\.jpg|\.webp)?$/i,
     ''
-
-  const match = String(fullStartDate).match(/^(\d{8})/)
-
-  if (match) {
-    return match[1]
-  }
-
-  const [year, month, day] = displayDate
-    .split('-')
-    .map(Number)
-
-  const date = new Date(Date.UTC(year, month - 1, day))
-  date.setUTCDate(date.getUTCDate() - 1)
-
-  return [
-    date.getUTCFullYear(),
-    String(date.getUTCMonth() + 1).padStart(2, '0'),
-    String(date.getUTCDate()).padStart(2, '0')
-  ].join('')
+  )
 }
 
-function collectMonthFiles(dir) {
-  if (!fs.existsSync(dir)) return []
-
-  const result = []
-
-  for (const entry of fs.readdirSync(dir, {
-    withFileTypes: true
-  })) {
-    const fullPath = path.join(dir, entry.name)
-
-    if (entry.isDirectory()) {
-      result.push(...collectMonthFiles(fullPath))
-      continue
-    }
-
-    const parentYear = path.basename(path.dirname(fullPath))
-
-    if (
-      entry.isFile() &&
-      /^\d{4}$/.test(parentYear) &&
-      /^\d{2}\.json$/.test(entry.name)
-    ) {
-      result.push(fullPath)
-    }
-  }
-
-  return result.sort()
+function getItems(data) {
+  if (Array.isArray(data)) return data
+  if (Array.isArray(data?.images)) return data.images
+  if (Array.isArray(data?.data)) return data.data
+  return []
 }
 
-function needsRepair(item) {
+function isBadDescription(item) {
   const description = String(item.description || '').trim()
   const copyright = String(item.copyright || '').trim()
 
@@ -108,21 +95,19 @@ function needsRepair(item) {
   )
 }
 
-function isUsableDescription(value, copyright = '') {
-  const description = String(value || '').trim()
+function isUsableDescription(item, description) {
+  const text = String(description || '').trim()
+  const copyright = String(item.copyright || '').trim()
 
   return (
-    description.length >= 20 &&
-    description !== String(copyright || '').trim() &&
+    text.length >= 20 &&
+    text !== copyright &&
     !/通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
-      description
+      text
     )
   )
 }
 
-/**
- * 获取网页 HTML，支持重定向和超时。
- */
 function requestText(url, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 5) {
@@ -136,12 +121,8 @@ function requestText(url, redirects = 0) {
       url,
       {
         headers: {
-          'User-Agent':
-            'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/140 Safari/537.36',
-          'Accept':
-            'text/html,application/xhtml+xml,application/json;q=0.9,*/*;q=0.8',
-          'Accept-Language':
-            'zh-CN,zh;q=0.9,en;q=0.5'
+          'User-Agent': 'bing-data-archive-repair',
+          Accept: 'application/json'
         }
       },
       res => {
@@ -169,16 +150,14 @@ function requestText(url, redirects = 0) {
         const chunks = []
 
         res.on('data', chunk => chunks.push(chunk))
-
         res.on('end', () => {
           resolve(Buffer.concat(chunks).toString('utf8'))
         })
-
         res.on('error', reject)
       }
     )
 
-    req.setTimeout(30000, () => {
+    req.setTimeout(45000, () => {
       req.destroy(new Error('请求超时'))
     })
 
@@ -186,130 +165,117 @@ function requestText(url, redirects = 0) {
   })
 }
 
-/**
- * 从 HTML 的 var _model = {...}; 中提取 JSON。
- *
- * 使用大括号配对，而不是用一个简单的贪婪正则，
- * 避免模型内字符串或嵌套对象导致截取错误。
- */
-function parseEmbeddedModel(html) {
-  const marker = /(?:var\s+_model|_model)\s*=\s*/.exec(html)
+async function loadArchiveSources() {
+  const allItems = []
+  const seen = new Set()
 
-  if (!marker) {
-    throw new Error('故事页面中没有找到 _model 数据')
-  }
+  for (const source of SOURCES) {
+    try {
+      console.log(`[归档] 正在读取：${source.name}`)
 
-  const start = html.indexOf('{', marker.index + marker[0].length)
+      const text = await requestText(source.url)
+      const data = JSON.parse(text)
+      const items = getItems(data)
 
-  if (start < 0) {
-    throw new Error('故事页面中的 _model 没有 JSON 对象')
-  }
+      for (const item of items) {
+        const date = normalizeDate(item.date || item.enddate)
+        const imageId = normalizeImageId(
+          item.urlbase || item.url || item.bing_url
+        )
+        const description = String(
+          item.description || ''
+        ).trim()
 
-  let depth = 0
-  let inString = false
-  let escaped = false
+        if (!date || !isUsableDescription(item, description)) {
+          continue
+        }
 
-  for (let i = start; i < html.length; i++) {
-    const char = html[i]
+        const key = `${date}|${imageId || ''}|${description}`
 
-    if (inString) {
-      if (escaped) {
-        escaped = false
-      } else if (char === '\\') {
-        escaped = true
-      } else if (char === '"') {
-        inString = false
+        if (seen.has(key)) continue
+        seen.add(key)
+
+        allItems.push({
+          source: source.name,
+          date,
+          imageId,
+          copyright: String(item.copyright || '').trim(),
+          description
+        })
       }
 
-      continue
-    }
-
-    if (char === '"') {
-      inString = true
-      continue
-    }
-
-    if (char === '{') {
-      depth++
-    } else if (char === '}') {
-      depth--
-
-      if (depth === 0) {
-        const jsonText = html.slice(start, i + 1)
-        return JSON.parse(jsonText)
-      }
+      console.log(
+        `[归档] ${source.name}：读取 ${items.length} 条，累计有效描述 ${allItems.length} 条`
+      )
+    } catch (error) {
+      console.error(
+        `[归档失败] ${source.name}：${error.message}`
+      )
     }
   }
 
-  throw new Error('_model JSON 不完整')
+  return allItems
 }
 
-function getModelEntries(model) {
-  return [
-    ...(Array.isArray(model.MediaContents)
-      ? model.MediaContents
-      : []),
-    ...(Array.isArray(model.PreloadMediaContents)
-      ? model.PreloadMediaContents
-      : [])
-  ]
-}
-
-/**
- * 按壁纸日期访问必应官方故事页。
- */
-async function fetchOfficialStoryDescription(item, date) {
-  const storyDate = getStoryDate(item, date)
-
-  const filter = `HpDate:"${storyDate}_1600"`
-
-  const url =
-    'https://cn.bing.com/search?q=1&filters=' +
-    encodeURIComponent(filter)
-
-  const html = await requestText(url)
-  const model = parseEmbeddedModel(html)
-  const entries = getModelEntries(model)
-
-  const candidates = entries
-    .map(entry => ({
-      entry,
-      description: String(
-        entry?.ImageContent?.Description ||
-        entry?.Description ||
-        ''
-      ).trim(),
-      backstageUrl: String(
-        entry?.BackstageUrl ||
-        entry?.ImageContent?.BackstageUrl ||
-        ''
-      )
-    }))
-    .filter(candidate =>
-      isUsableDescription(
-        candidate.description,
-        item.copyright || ''
-      )
-    )
-
-  // 如果模型有日期标记，优先选择日期完全匹配的记录。
-  const dateMatched = candidates.find(candidate =>
-    candidate.backstageUrl.includes(storyDate)
+function findDescription(item, archiveItems) {
+  const date = normalizeDate(item.date)
+  const imageId = normalizeImageId(
+    item.urlbase || item.url || item.sourceImage
   )
+  const copyright = String(item.copyright || '').trim()
 
-  const selected = dateMatched || candidates[0]
+  const candidates = archiveItems.filter(entry => entry.date === date)
 
-  if (!selected) {
-    throw new Error(
-      `官方故事页没有返回有效描述（展示日期 ${date}，故事日期 ${storyDate}）`
-    )
+  for (const entry of candidates) {
+    if (
+      imageId &&
+      entry.imageId &&
+      imageId !== entry.imageId
+    ) {
+      continue
+    }
+
+    if (
+      !entry.imageId &&
+      copyright &&
+      entry.copyright &&
+      copyright !== entry.copyright
+    ) {
+      continue
+    }
+
+    return entry.description
   }
 
-  return selected.description
+  return ''
+}
+
+function collectMonthFiles(dir) {
+  if (!fs.existsSync(dir)) return []
+
+  const files = []
+
+  for (const entry of fs.readdirSync(dir, {
+    withFileTypes: true
+  })) {
+    const fullPath = path.join(dir, entry.name)
+
+    if (entry.isDirectory()) {
+      files.push(...collectMonthFiles(fullPath))
+    } else if (
+      entry.isFile() &&
+      /^\d{2}\.json$/.test(entry.name) &&
+      /^\d{4}$/.test(path.basename(path.dirname(fullPath)))
+    ) {
+      files.push(fullPath)
+    }
+  }
+
+  return files.sort()
 }
 
 async function main() {
-  if (LIMIT < 0 || !Number.isInteger(LIMIT)) {
+  if (!Number.isInteger(LIMIT) || LIMIT < 0) {
     throw new Error('LIMIT 必须是非负整数')
   }
 
@@ -325,6 +291,12 @@ async function main() {
     throw new Error('START_DATE 不能晚于 END_DATE')
   }
 
+  const archiveItems = await loadArchiveSources()
+
+  if (archiveItems.length === 0) {
+    throw new Error('所有 GitHub 归档都没有返回有效描述，停止修复')
+  }
+
   const files = collectMonthFiles(DATA_ROOT).filter(file => {
     if (YEAR === 'all') return true
     return path.basename(path.dirname(file)) === YEAR
@@ -334,7 +306,6 @@ async function main() {
   let updated = 0
   let skipped = 0
   let missing = 0
-  let failed = 0
 
   for (const file of files) {
     if (LIMIT > 0 && checked >= LIMIT) break
@@ -354,39 +325,27 @@ async function main() {
       if (START_DATE && date < START_DATE) continue
       if (END_DATE && date > END_DATE) continue
 
-      if (!FORCE && !needsRepair(item)) {
+      if (!FORCE && !isBadDescription(item)) {
         skipped++
         continue
       }
 
       checked++
 
-      try {
-        const description = await fetchOfficialStoryDescription(
-          item,
-          date
-        )
+      const description = findDescription(item, archiveItems)
 
-        if (!isUsableDescription(description, item.copyright)) {
-          console.log(`[跳过] ${date}：描述内容未通过验证`)
-          missing++
-          continue
-        }
-
-        if (item.description === description) {
-          skipped++
-          continue
-        }
-
-        // 月度记录只修改 description 字段。
+      if (!description || !isUsableDescription(item, description)) {
+        console.log(`[无归档描述] ${date}`)
+        missing++
+      } else if (item.description === description) {
+        skipped++
+      } else {
+        // 只修改 description，不修改其他字段。
         item.description = description
         changed = true
         updated++
 
         console.log(`[已更新] ${date}`)
-      } catch (error) {
-        failed++
-        console.error(`[获取失败] ${date}：${error.message}`)
       }
 
       if (DELAY_MS > 0) {
@@ -409,16 +368,11 @@ async function main() {
     buildIndex()
   }
 
-  console.log('========== 历史描述修复结果 ==========')
+  console.log('========== GitHub 归档描述修复结果 ==========')
   console.log(`检查记录：${checked}`)
   console.log(`更新描述：${updated}`)
   console.log(`跳过记录：${skipped}`)
-  console.log(`无有效描述：${missing}`)
-  console.log(`请求或解析失败：${failed}`)
-
-  if (failed > 0) {
-    process.exitCode = 1
-  }
+  console.log(`归档中没有有效描述：${missing}`)
 }
 
 main().catch(error => {
