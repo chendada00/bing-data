@@ -975,6 +975,20 @@ async function main() {
     '========== Bing wallpaper update =========='
   )
 
+  /*
+   * 1. 先获取当天的 Bing 元数据。
+   * 日期以 Bing enddate 为准。
+   */
+  const {
+    bing,
+    date,
+    sourceImage
+  } = await fetchBingMetadata()
+
+  /*
+   * 2. 获取真正的壁纸描述。
+   * 失败时不使用 copyright 或搜索页宣传文案冒充描述。
+   */
   let officialDescription = null
 
   try {
@@ -982,31 +996,25 @@ async function main() {
       date,
       bing.copyright || ''
     )
+
+    if (
+      !isUsableDescription(
+        officialDescription,
+        bing.copyright || ''
+      )
+    ) {
+      officialDescription = null
+    }
+
+    if (officialDescription) {
+      log(`已获取官方壁纸描述：${date}`)
+    } else {
+      log(`未找到匹配的官方壁纸描述：${date}`)
+    }
   } catch (error) {
-    log(`Description fetch failed: ${error.message}`)
+    log(`获取壁纸描述失败：${error.message}`)
   }
 
-  if (
-    !isUsableDescription(
-      officialDescription,
-      bing.copyright || ''
-    )
-  ) {
-    officialDescription = null
-  }
-
-  /*
-   * 1. 获取 Bing 当前真正发布的壁纸。
-   *
-   * 注意：
-   * 日期完全以 Bing enddate 为准。
-   */
-  const {
-    bing,
-    date,
-    sourceImage
-  } =
-    await fetchBingMetadata()
 
   const year =
     date.slice(0, 4)
@@ -1180,19 +1188,13 @@ async function main() {
       officialDescription ||
       (
         existing?.description &&
-        existing.descriptionSource &&
-        existing.descriptionSource !== 'bing-copyright'
+        isUsableDescription(
+          existing.description,
+          existing.copyright || ''
+        )
           ? existing.description
           : ''
       ),
-
-    descriptionSource:
-      officialDescription
-        ? 'bing-story-page'
-        : (
-            existing?.descriptionSource || null
-          ),
-
     copyright:
       bing.copyright ||
       existing?.copyright ||

@@ -54,19 +54,18 @@ function collectMonthFiles(dir) {
   return files.sort()
 }
 
+
 function needsRepair(item) {
   const description = String(item.description || '').trim()
   const copyright = String(item.copyright || '').trim()
 
-  if (!description) return true
-  if (description === copyright) return true
-
-  if (item.descriptionSource === 'bing-copyright') {
-    return true
-  }
-
-  return false
+  return (
+    !description ||
+    description === copyright ||
+    /通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(description)
+  )
 }
+
 
 async function main() {
   const files = collectMonthFiles(DATA_ROOT)
@@ -81,6 +80,9 @@ async function main() {
   let failed = 0
 
   for (const file of files) {
+    if (LIMIT > 0 && checked >= LIMIT) {
+      break
+    }
     const original = fs.readFileSync(file, 'utf8')
     const data = JSON.parse(original)
 
@@ -118,25 +120,23 @@ async function main() {
             item.copyright || ''
           )
         ) {
-          console.log(`[SKIP] ${date}: no verified description`)
+          console.log(`[跳过] ${date}：没有获取到有效描述`)
           skipped++
           continue
         }
 
-        if (
-          item.description === description &&
-          item.descriptionSource === 'bing-story-page'
-        ) {
+        if (item.description === description) {
           skipped++
           continue
         }
 
         // 只修改这两个字段。
         item.description = description
-        item.descriptionSource = 'bing-story-page'
 
         changed = true
         updated++
+
+        console.log(`[已更新] ${date}`)
 
         console.log(`[UPDATED] ${date}`)
       } catch (error) {
