@@ -794,166 +794,47 @@ function normalizeBingImageId(value) {
 }
 
 
-/**
- * 从 GitHub 壁纸归档获取故事描述。
- *
- * 优先级：
- * 1. zigou23/Bing-Daily-Wallpaper 当前中文归档
- * 2. npanuhin/Bing-Wallpaper-Archive 中文归档
- *
- * 不调用必应官方接口。
- */
-async function fetchArchiveDescription(bing, date) {
-  const sources = [
-    {
-      name: 'Bing-Daily-Wallpaper',
-      url: 'https://raw.githubusercontent.com/zigou23/Bing-Daily-Wallpaper/main/bing/bing_zh-CN.json'
-    },
-    {
-      name: 'Bing-Wallpaper-Archive',
-      url: 'https://raw.githubusercontent.com/npanuhin/Bing-Wallpaper-Archive/master/api/CN/zh.json'
-    }
-  ]
+async function fetchOfficialDescription(bing) {
+  const endpoint =
+    'https://www.bing.com/hp/api/model?mkt=zh-CN'
 
-  function normalizeArchiveDate(value) {
-    const text = String(value || '').trim()
+  const buffer = await requestBuffer(endpoint)
+  const model = JSON.parse(buffer.toString('utf8'))
 
-    if (/^\d{8}$/.test(text)) {
-      return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
-    }
+  const contents = Array.isArray(model.MediaContents)
+    ? model.MediaContents
+    : []
 
-    if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-      return text
-    }
+  const wantedId = normalizeBingImageId(
+    bing.urlbase || bing.url
+  )
 
-    return ''
-  }
+  if (!wantedId) return ''
 
-  function normalizeImageId(value) {
-    if (!value) return ''
+  for (const content of contents) {
+    const imageContent = content?.ImageContent
+    const image = imageContent?.Image
 
-    let raw = String(value).trim()
-
-    try {
-      const parsed = new URL(raw, 'https://www.bing.com')
-      raw = parsed.searchParams.get('id') || raw
-    } catch {
-      // 继续处理原始值。
-    }
-
-    try {
-      raw = decodeURIComponent(raw)
-    } catch {
-      // 保留原始值。
-    }
-
-    const match = raw.match(/OHR\.[^&?]+/i)
-    if (!match) return ''
-
-    return match[0].replace(
-      /_(?:\d{3,4}x\d{3,4}|UHD)(?:\.jpg|\.webp)?$/i,
-      ''
+    const imageId = normalizeBingImageId(
+      image?.Wallpaper || image?.Url
     )
-  }
 
-  function getItems(data) {
-    if (Array.isArray(data)) return data
-    if (Array.isArray(data?.images)) return data.images
-    if (Array.isArray(data?.data)) return data.data
-    return []
-  }
+    if (imageId !== wantedId) continue
 
-  function findDescription(items) {
-    const wantedDate = normalizeArchiveDate(date)
-    const wantedId = normalizeImageId(
-      bing.urlbase || bing.url
-    )
-    const wantedCopyright = String(
-      bing.copyright || ''
+    const description = String(
+      imageContent?.Description || ''
     ).trim()
 
-    const candidates = items.filter(item => {
-      return normalizeArchiveDate(
-        item.date || item.enddate
-      ) === wantedDate
-    })
-
-    for (const item of candidates) {
-      const description = String(
-        item.description || ''
-      ).trim()
-
-      if (
-        description.length < 20 ||
-        description === String(item.copyright || '').trim() ||
-        description === wantedCopyright ||
-        /通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
-          description
-        )
-      ) {
-        continue
-      }
-
-      const archiveId = normalizeImageId(
-        item.urlbase ||
-        item.url ||
-        item.bing_url
-      )
-
-      // 双方都有图片 ID 时必须精确匹配。
-      if (
-        wantedId &&
-        archiveId &&
-        wantedId !== archiveId
-      ) {
-        continue
-      }
-
-      // 日期相同但图片 ID 缺失时，若版权信息明确冲突，
-      // 不使用这条记录，避免错配。
-      const archiveCopyright = String(
-        item.copyright || ''
-      ).trim()
-
-      if (
-        !archiveId &&
-        wantedCopyright &&
-        archiveCopyright &&
-        wantedCopyright !== archiveCopyright
-      ) {
-        continue
-      }
-
+    if (
+      description.length >= 20 &&
+      description !== String(bing.copyright || '').trim()
+    ) {
       return description
-    }
-
-    return ''
-  }
-
-  log(`正在查询 GitHub 壁纸归档：${date}`)
-
-  for (const source of sources) {
-    try {
-      log(`读取归档：${source.name}`)
-
-      const buffer = await requestBuffer(source.url)
-      const data = JSON.parse(buffer.toString('utf8'))
-      const description = findDescription(getItems(data))
-
-      if (description) {
-        log(`已从 ${source.name} 获取描述：${date}`)
-        return description
-      }
-
-      log(`${source.name} 中没有找到该日期的有效描述`)
-    } catch (error) {
-      log(`读取 ${source.name} 失败：${error.message}`)
     }
   }
 
   return ''
 }
-
 
 /**
  * 从已有 bing-uhd 文件读取图片。
@@ -1183,17 +1064,13 @@ async function main() {
   } = await fetchBingMetadata()
 
 
-  let archiveDescription = ''
+  let officialDescription = ''
 
   try {
-    archiveDescription = await fetchArchiveDescription(
-      bing,
-      date
-    )
+    officialDescription = await fetchOfficialDescription(bing)
   } catch (error) {
-    log(`获取 GitHub 归档描述失败：${error.message}`)
+    log(`获取必应官方描述失败：${error.message}`)
   }
-
   
   const year =
     date.slice(0, 4)
@@ -1364,16 +1241,7 @@ async function main() {
       '',
 
     description:
-      archiveDescription  ||
-      (
-        existing?.description &&
-        existing.description !== existing.copyright &&
-        !/通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
-          existing.description
-        )
-          ? existing.description
-          : ''
-      ),
+      officialDescription,
 
     copyright:
       bing.copyright ||
