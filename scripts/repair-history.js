@@ -5,6 +5,7 @@ const http = require('http')
 
 const Jimp = require('jimp')
 const Vibrant = require('node-vibrant')
+const sharp = require('sharp')
 
 const {
   getColorHistogram,
@@ -463,43 +464,54 @@ async function downloadImage(url) {
 function buildFallbackImageUrls(source) {
   const candidates = []
 
-  // 优先尝试历史记录中已经提供的完整图片 URL。
-  if (typeof source.url === 'string' && source.url.trim()) {
+  // 1. 优先尝试历史数据源明确提供的完整图片地址。
+  if (
+    typeof source.url === 'string' &&
+    source.url.trim()
+  ) {
     candidates.push(source.url.trim())
   }
 
-  // 如果 urlbase 是 Bing 图片路径，再尝试常见的普通尺寸。
-  if (typeof source.urlbase === 'string' && source.urlbase.trim()) {
+  // 2. 尝试 urlbase 本身，不再随意拼接不存在的尺寸后缀。
+  if (
+    typeof source.urlbase === 'string' &&
+    source.urlbase.trim()
+  ) {
     const raw = source.urlbase.trim()
 
     try {
-      const url = raw.startsWith('http://') ||
-        raw.startsWith('https://')
+      const url = /^https?:\/\//i.test(raw)
         ? new URL(raw)
         : new URL(
             raw.startsWith('/') ? raw : `/${raw}`,
             'https://www.bing.com'
           )
 
-      const pathname = url.pathname
-        .replace(/_(?:UHD|1920x1080|1366x768)\.jpg$/i, '')
-
-      for (const size of ['1920x1080', '1366x768']) {
-        const fallback = new URL(url.toString())
-        fallback.pathname = `${pathname}_${size}.jpg`
-        candidates.push(fallback.toString())
-      }
+      candidates.push(url.toString())
     } catch (error) {
-      log(`Cannot construct fallback URL: ${error.message}`)
+      log(
+        `Cannot parse fallback URL: ${error.message}`
+      )
     }
   }
 
-  // 去重，并排除 UHD 地址，避免重复下载同一个失败来源。
-  return [...new Set(candidates)].filter(url =>
-    typeof url === 'string' &&
-    /^https?:\/\//i.test(url) &&
-    !/_UHD\.jpg(?:\?.*)?$/i.test(url)
-  )
+  const officialUrl = buildOfficialUhdUrl(source.urlbase)
+
+  // 去重；剔除官方 UHD 地址，避免对同一地址重复请求。
+  return [...new Set(candidates)].filter(url => {
+    if (
+      typeof url !== 'string' ||
+      !/^https?:\/\//i.test(url)
+    ) {
+      return false
+    }
+
+    if (officialUrl && url === officialUrl) {
+      return false
+    }
+
+    return !/_UHD\.jpg(?:\?.*)?$/i.test(url)
+  })
 }
 
 async function obtainUhd(source, date, forceDownload = false) {
@@ -628,18 +640,46 @@ async function validateImageBuffer(buffer) {
     throw new Error('Image buffer is empty')
   }
 
-  const image = await Jimp.read(buffer)
-  const width = image.bitmap.width
-  const height = image.bitmap.height
+  // 先读取原图元数据，不用 Jimp 解码完整 UHD 图片。
+  const metadata = await sharp(buffer, {
+    failOn: 'error',
+    limitInputPixels: 100000000
+  }).metadata()
 
-  if (!isValidImageDimension(width, height)) {
+  const width = Number(metadata.width)
+  const height = Number(metadata.height)
+
+  if (
+    !Number.isFinite(width) ||
+    !Number.isFinite(height) ||
+    !isValidImageDimension(width, height)
+  ) {
     throw new Error(
       `Invalid image dimensions: ${width}x${height}`
     )
   }
 
+  // sharp 使用 libvips 处理原图，只生成一份小尺寸分析图。
+  // 保持比例，避免为颜色分析和直方图保留完整 UHD 像素。
+  const analysisBuffer = await sharp(buffer, {
+    failOn: 'error',
+    limitInputPixels: 100000000
+  })
+    .resize({
+      width: 1600,
+      height: 900,
+      fit: 'inside',
+      withoutEnlargement: true
+    })
+    .jpeg({ quality: 85 })
+    .toBuffer()
+
+  // Jimp 只处理分析图，不再解码完整原图。
+  const image = await Jimp.read(analysisBuffer)
+
   return {
     image,
+    analysisBuffer,
     width,
     height,
     valid: true,
@@ -650,7 +690,7 @@ async function validateImageBuffer(buffer) {
   }
 }
 
-// 保留旧函数名，避免影响现有调用处。
+// 保留旧函数名，兼容原有调用位置。
 async function validateUhdBuffer(buffer) {
   return validateImageBuffer(buffer)
 }
@@ -661,6 +701,7 @@ async function loadImageFromFile(file) {
   }
 
   try {
+    // buffer 是磁盘上的原始文件内容，不能替换成分析图。
     const buffer = fs.readFileSync(file)
     const result = await validateImageBuffer(buffer)
 
@@ -677,19 +718,14 @@ async function loadImageFromFile(file) {
 }
 
 
-async function getBase64(
-  imageBuffer
-) {
-  const image =
-    await Jimp.read(imageBuffer)
+async function getBase64(imageBuffer) {
+  const image = await Jimp.read(imageBuffer)
 
   image
     .resize(16, 9)
     .quality(90)
 
-  return image.getBase64Async(
-    Jimp.MIME_JPEG
-  )
+  return image.getBase64Async(Jimp.MIME_JPEG)
 }
 
 function isValidBase64(value) {
@@ -772,70 +808,45 @@ function isValidColor(color) {
   )
 }
 
-async function getMainColors(
-  imageBuffer
-) {
-  const image =
-    await Jimp.read(imageBuffer)
+async function getMainColors(imageBuffer) {
+  const image = await Jimp.read(imageBuffer)
 
   const tempFile = path.join(
-    process.env.RUNNER_TEMP ||
-      '/tmp',
+    process.env.RUNNER_TEMP || '/tmp',
     `bing-color-${Date.now()}-${Math.random()
       .toString(16)
       .slice(2)}.jpg`
   )
 
-  await image.writeAsync(
-    tempFile
-  )
+  await image.writeAsync(tempFile)
 
   try {
-    const palette =
-      await new Promise(
-        (resolve, reject) => {
-          Vibrant.from(
-            tempFile
-          ).getPalette(
-            (error, result) => {
-              if (error) {
-                reject(error)
-              } else {
-                resolve(result)
-              }
-            }
-          )
+    const palette = await new Promise((resolve, reject) => {
+      Vibrant.from(tempFile).getPalette((error, result) => {
+        if (error) {
+          reject(error)
+        } else {
+          resolve(result)
         }
-      )
+      })
+    })
 
     const colors = {}
 
     COLOR_KEYS.forEach(key => {
-      const swatch =
-        palette &&
-        palette[key]
+      const swatch = palette && palette[key]
 
-      if (
-        swatch &&
-        Array.isArray(
-          swatch.rgb
-        )
-      ) {
-        colors[key] =
-          rgbToHex(
-            swatch.rgb
-          )
+      if (swatch && Array.isArray(swatch.rgb)) {
+        colors[key] = rgbToHex(swatch.rgb)
       }
     })
 
     return colors
   } finally {
     try {
-      fs.unlinkSync(
-        tempFile
-      )
+      fs.unlinkSync(tempFile)
     } catch {
-      // ignore
+      // 忽略临时文件清理错误。
     }
   }
 }
@@ -1477,182 +1488,104 @@ async function generateDerivedData(
 ) {
   const result = {}
 
-  const imageInfo =
-    await validateUhdBuffer(
-      imageBuffer
-    )
+  // imageInfo.width / height 是原始图片的真实尺寸。
+  // imageInfo.image 和 analysisBuffer 是缩小后的分析图。
+  const imageInfo = await validateUhdBuffer(imageBuffer)
 
-  if (
-    !imageInfo.valid
-  ) {
+  if (!imageInfo.valid) {
     throw new Error(
-      `Invalid UHD image dimensions: ${imageInfo.width}x${imageInfo.height}`
+      `Invalid image dimensions: ${imageInfo.width}x${imageInfo.height}`
     )
   }
 
   if (
     force ||
-    !isValidBase64(
-      item.base64
+    !isValidBase64(item.base64)
+  ) {
+    result.base64 = await getBase64(
+      imageInfo.analysisBuffer
     )
-  ) {
-    result.base64 =
-      await getBase64(
-        imageBuffer
-      )
   }
 
   if (
     force ||
-    !isValidColor(
-      item.color
+    !isValidColor(item.color)
+  ) {
+    result.color = await getMainColors(
+      imageInfo.analysisBuffer
     )
-  ) {
-    result.color =
-      await getMainColors(
-        imageBuffer
-      )
   }
 
   if (
     force ||
-    !validateHistogram(
-      item.colorHistogram
+    !validateHistogram(item.colorHistogram)
+  ) {
+    result.colorHistogram = await getColorHistogram(
+      imageInfo.image
     )
+  }
+
+  // 不新增字段，只修复已有的 width / height。
+  if (
+    force ||
+    Number(item.width) !== imageInfo.width
   ) {
-    result.colorHistogram =
-      await getColorHistogram(
-        imageInfo.image
-      )
+    result.width = imageInfo.width
   }
 
   if (
     force ||
-    Number(item.width) !==
-      imageInfo.width
+    Number(item.height) !== imageInfo.height
   ) {
-    result.width =
-      imageInfo.width
-  }
-
-  if (
-    force ||
-    Number(item.height) !==
-      imageInfo.height
-  ) {
-    result.height =
-      imageInfo.height
+    result.height = imageInfo.height
   }
 
   return result
 }
 
-async function generatePreview(
-  imageBuffer,
-  previewFile
-) {
-  const source =
-    await Jimp.read(
-      imageBuffer
-    )
-
-  const qualities = [
-    82,
-    78,
-    75,
-    72,
-    70
+async function generatePreview(imageBuffer, previewFile) {
+  const attempts = [
+    { width: 1600, height: 900, qualities: [82, 78, 75, 72, 70] },
+    { width: 1280, height: 720, qualities: [78, 75, 72, 70] }
   ]
 
-  for (
-    const quality of qualities
-  ) {
-    const image =
-      source
-        .clone()
-        .resize(1600, 900)
-        .quality(quality)
+  for (const attempt of attempts) {
+    for (const quality of attempt.qualities) {
+      const buffer = await sharp(imageBuffer, {
+        failOn: 'error',
+        limitInputPixels: 100000000
+      })
+        .resize({
+          width: attempt.width,
+          height: attempt.height,
+          fit: 'fill'
+        })
+        .jpeg({ quality })
+        .toBuffer()
 
-    const buffer =
-      await image.getBufferAsync(
-        Jimp.MIME_JPEG
+      log(
+        `Preview attempt: ${attempt.width}x${attempt.height} ` +
+        `quality=${quality}, size=${Math.round(buffer.length / 1024)}KB`
       )
 
-    log(
-      `Preview attempt: 1600x900 quality=${quality}, size=${Math.round(buffer.length / 1024)}KB`
-    )
-
-    if (
-      buffer.length <=
-      PREVIEW_MAX_SIZE
-    ) {
-      fs.mkdirSync(
-        path.dirname(
-          previewFile
-        ),
-        {
+      if (
+        buffer.length <= PREVIEW_MAX_SIZE ||
+        (
+          attempt.width === 1280 &&
+          quality === 70
+        )
+      ) {
+        fs.mkdirSync(path.dirname(previewFile), {
           recursive: true
-        }
-      )
+        })
 
-      fs.writeFileSync(
-        previewFile,
-        buffer
-      )
-
-      return
+        fs.writeFileSync(previewFile, buffer)
+        return
+      }
     }
   }
 
-  for (
-    const quality of [
-      78,
-      75,
-      72,
-      70
-    ]
-  ) {
-    const image =
-      source
-        .clone()
-        .resize(1280, 720)
-        .quality(quality)
-
-    const buffer =
-      await image.getBufferAsync(
-        Jimp.MIME_JPEG
-      )
-
-    log(
-      `Preview fallback: 1280x720 quality=${quality}, size=${Math.round(buffer.length / 1024)}KB`
-    )
-
-    if (
-      buffer.length <=
-        PREVIEW_MAX_SIZE ||
-      quality === 70
-    ) {
-      fs.mkdirSync(
-        path.dirname(
-          previewFile
-        ),
-        {
-          recursive: true
-        }
-      )
-
-      fs.writeFileSync(
-        previewFile,
-        buffer
-      )
-
-      return
-    }
-  }
-
-  throw new Error(
-    'Failed to generate preview'
-  )
+  throw new Error('Failed to generate preview')
 }
 
 async function getExistingImageBuffer(
@@ -1776,16 +1709,7 @@ async function repairExistingItem(
     changed = true
   }
 
-  const officialUhdUrl =
-    buildOfficialUhdUrl(source.urlbase)
 
-  if (
-    officialUhdUrl &&
-    item.sourceImage !== officialUhdUrl
-  ) {
-    item.sourceImage = officialUhdUrl
-    changed = true
-  }
 
   const uhd =
     await obtainUhd(
@@ -1907,12 +1831,15 @@ async function createMissingItem(
       options?.forceUhd === true
     )
 
-  const base64 = await getBase64(uhd.buffer)
+  const derived = await generateDerivedData(
+    uhd.buffer,
+    {},
+    true
+  )
 
-  const color = await getMainColors(uhd.buffer)
-
-  const image = await Jimp.read(uhd.buffer)
-  const colorHistogram = await getColorHistogram(image)
+  const base64 = derived.base64
+  const color = derived.color
+  const colorHistogram = derived.colorHistogram
 
   const previewFile =
     path.join(
@@ -1989,11 +1916,9 @@ async function createMissingItem(
 
     colorHistogram,
 
-    width:
-      uhd.width,
+    width: derived.width,
 
-    height:
-      uhd.height,
+    height: derived.height,
 
     id: null,
 
@@ -2657,6 +2582,7 @@ async function runRepair(
   let repaired = 0
   let created = 0
   let downloaded = 0
+  let failed = 0
 
   const entries =
     Array.from(
@@ -2786,8 +2712,10 @@ async function runRepair(
         `[REPAIR] DATA CREATED: ${date}`
       )
     } catch (error) {
+      failed++
+
       console.error(
-        `[REPAIR] FAILED: ${date}: ${error.message}`
+        `[REPAIR] FAILED: ${date}: ${error.stack || error.message}`
       )
     }
   }
@@ -2832,11 +2760,20 @@ async function runRepair(
     `Downloaded UHD: ${downloaded}`
   )
   console.log(
+    `Failed records: ${failed}`
+  )
+  console.log(
     `Changed JSON files: ${changedFiles.size}`
   )
   console.log(
     '===================================='
   )
+  if (failed > 0) {
+    throw new Error(
+      `History repair completed with ${failed} failed record(s). ` +
+      'Check the [REPAIR] FAILED logs above.'
+    )
+  }
 }
 
 async function runSwitchImageUrl(

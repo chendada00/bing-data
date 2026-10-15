@@ -287,7 +287,7 @@ jobs:
         run: |
           set -euo pipefail
           npm init -y
-          npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1
+          npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1 sharp
 
       - name: Run history repair
         shell: bash
