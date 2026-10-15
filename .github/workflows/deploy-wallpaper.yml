@@ -3,10 +3,14 @@ name: Deploy Bing Wallpaper
 
 on:
   workflow_dispatch:
+    inputs:
+      force_deploy:
+        description: "强制重新部署 bing-wallpaper"
+        required: false
+        default: false
+        type: boolean
 
   push:
-    paths:
-      - "data/**"
 
 permissions:
   contents: read
@@ -17,9 +21,9 @@ concurrency:
 
 jobs:
   deploy:
-    name: Notify and trigger deployment
+    name: Detect changes, notify and deploy
     runs-on: ubuntu-latest
-    timeout-minutes: 5
+    timeout-minutes: 10
 
     steps:
       - name: Checkout bing-data
@@ -27,52 +31,79 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: Collect update information
+      - name: Analyze repository changes
         id: changes
         shell: bash
         env:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
+          FORCE_DEPLOY: ${{ inputs.force_deploy || false }}
         run: |
           set -euo pipefail
 
-          if [[ "$EVENT_NAME" == "push" ]] &&
-             [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
-            BEFORE_SHA=""
-          fi
-
-          if [[ "$EVENT_NAME" == "push" ]] &&
-             [[ -n "$BEFORE_SHA" ]]; then
-            FILES="$(git diff --name-only \
-              "$BEFORE_SHA" "$CURRENT_SHA" -- data/)"
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            if [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+              FILES="$(git ls-tree -r --name-only "$CURRENT_SHA")"
+            else
+              FILES="$(git diff --name-only \
+                "$BEFORE_SHA" "$CURRENT_SHA")"
+            fi
           else
             FILES="$(git diff-tree \
-              --no-commit-id --name-only -r HEAD -- data/)"
+              --no-commit-id --name-only -r "$CURRENT_SHA")"
           fi
 
           if [[ -z "$FILES" ]]; then
-            FILES="未检测到 data/ 文件变更（手动触发或合并提交）"
+            DISPLAY_FILES="未检测到文件变更（可能是手动触发）"
             FILE_COUNT=0
           else
+            DISPLAY_FILES="$FILES"
             FILE_COUNT="$(printf '%s\n' "$FILES" | wc -l | tr -d ' ')"
+          fi
+
+          DEPLOY_REQUIRED="false"
+
+          while IFS= read -r file; do
+            [[ -z "$file" ]] && continue
+
+            case "$file" in
+              data/*|preview/*)
+                DEPLOY_REQUIRED="true"
+                break
+                ;;
+            esac
+          done <<< "$FILES"
+
+          if [[ "$EVENT_NAME" == "workflow_dispatch" ]] &&
+             [[ "$FORCE_DEPLOY" == "true" ]]; then
+            DEPLOY_REQUIRED="true"
           fi
 
           {
             echo "files<<CHANGE_FILES_EOF"
-            printf '%s\n' "$FILES"
+            printf '%s\n' "$DISPLAY_FILES"
             echo "CHANGE_FILES_EOF"
             echo "file_count=$FILE_COUNT"
+            echo "deploy_required=$DEPLOY_REQUIRED"
           } >> "$GITHUB_OUTPUT"
 
-          echo "### Data changes" >> "$GITHUB_STEP_SUMMARY"
-          echo "- Changed files: $FILE_COUNT" >> "$GITHUB_STEP_SUMMARY"
-          echo '```text' >> "$GITHUB_STEP_SUMMARY"
-          printf '%s\n' "$FILES" >> "$GITHUB_STEP_SUMMARY"
-          echo '```' >> "$GITHUB_STEP_SUMMARY"
+          {
+            echo "## Repository change summary"
+            echo "- Event: $EVENT_NAME"
+            echo "- Changed files: $FILE_COUNT"
+            echo "- Deployment required: $DEPLOY_REQUIRED"
+            echo '```text'
+            printf '%s\n' "$DISPLAY_FILES"
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Trigger bing-wallpaper
+          echo "Changed files: $FILE_COUNT"
+          echo "Deployment required: $DEPLOY_REQUIRED"
+
+      - name: Trigger bing-wallpaper deployment
         id: deploy
+        if: steps.changes.outputs.deploy_required == 'true'
         shell: bash
         env:
           GH_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
@@ -112,6 +143,8 @@ jobs:
             }')"
 
           HTTP_CODE="$(curl -sS \
+            --connect-timeout 10 \
+            --max-time 30 \
             -o /tmp/dispatch-response.json \
             -w '%{http_code}' \
             -X POST \
@@ -128,8 +161,13 @@ jobs:
             exit 1
           fi
 
-          echo "Deployment trigger accepted by GitHub."
-          echo "HTTP status: $HTTP_CODE"
+          echo "GitHub accepted the deployment trigger."
+
+      - name: Skip deployment
+        if: steps.changes.outputs.deploy_required != 'true'
+        run: |
+          echo "No deployment-triggering changes detected."
+          echo "PushPlus notification will still be sent."
 
       - name: Send PushPlus notification
         if: always()
@@ -137,40 +175,42 @@ jobs:
         shell: bash
         env:
           PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
-          JOB_STATUS: ${{ job.status }}
           SOURCE_SHA: ${{ github.sha }}
           SOURCE_ACTOR: ${{ github.actor }}
           SOURCE_EVENT: ${{ github.event_name }}
           CHANGE_FILES: ${{ steps.changes.outputs.files }}
           FILE_COUNT: ${{ steps.changes.outputs.file_count }}
+          DEPLOY_REQUIRED: ${{ steps.changes.outputs.deploy_required }}
+          DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-          DISPATCH_OUTCOME: ${{ steps.deploy.outcome }}
         run: |
           set -euo pipefail
 
           if [[ -z "${PUSHPLUS_TOKEN:-}" ]]; then
-            echo "PUSHPLUS_TOKEN not configured; skipping notification."
+            echo "::warning::PUSHPLUS_TOKEN not configured."
             exit 0
           fi
 
-          if [[ "$DISPATCH_OUTCOME" == "success" ]]; then
-            TITLE="Bing Wallpaper 更新部署已触发"
-            RESULT="GitHub 已接受重新部署触发请求。"
+          if [[ "$DEPLOY_REQUIRED" == "true" ]]; then
+            if [[ "$DEPLOY_OUTCOME" == "success" ]]; then
+              DEPLOY_STATUS="已成功发送部署触发请求"
+            else
+              DEPLOY_STATUS="部署触发失败，请检查工作流日志"
+            fi
           else
-            TITLE="Bing Wallpaper 部署触发失败"
-            RESULT="触发请求未成功，请查看 GitHub Actions 日志。"
+            DEPLOY_STATUS="本次不需要重新部署"
           fi
 
           CONTENT="$(cat <<EOF
-          ## Bing Wallpaper 数据更新
+          ## bing-data 仓库更新通知
 
-          - **结果：** $RESULT
           - **触发方式：** $SOURCE_EVENT
           - **操作人：** $SOURCE_ACTOR
-          - **数据提交：** \`$SOURCE_SHA\`
-          - **修改文件数：** ${FILE_COUNT:-0}
+          - **提交：** \`$SOURCE_SHA\`
+          - **变更文件数：** ${FILE_COUNT:-0}
+          - **部署状态：** $DEPLOY_STATUS
 
-          ### 本次修改文件
+          ### 本次变更文件
 
           \`\`\`text
           ${CHANGE_FILES:-未获取到文件列表}
@@ -178,13 +218,13 @@ jobs:
 
           [查看 GitHub Actions 运行日志]($RUN_URL)
 
-          > 注意：触发请求成功不等于网站部署已经完成。
+          > 部署触发请求成功不代表网站构建和发布已经完成。
           EOF
           )"
 
           BODY="$(jq -n \
             --arg token "$PUSHPLUS_TOKEN" \
-            --arg title "$TITLE" \
+            --arg title "bing-data 仓库更新通知" \
             --arg content "$CONTENT" \
             '{
               token: $token,
@@ -194,10 +234,10 @@ jobs:
             }')"
 
           HTTP_CODE="$(curl -sS \
-            -o /tmp/pushplus-response.json \
-            -w '%{http_code}' \
             --connect-timeout 10 \
             --max-time 30 \
+            -o /tmp/pushplus-response.json \
+            -w '%{http_code}' \
             -X POST \
             -H "Content-Type: application/json" \
             "https://www.pushplus.plus/send" \
@@ -211,9 +251,9 @@ jobs:
 
           if ! jq -e '.code == 200' \
             /tmp/pushplus-response.json >/dev/null; then
-            echo "::warning::PushPlus did not return code 200"
+            echo "::warning::PushPlus API returned an unexpected response."
             cat /tmp/pushplus-response.json
             exit 1
           fi
 
-          echo "PushPlus accepted the notification."
+          echo "PushPlus notification accepted."
