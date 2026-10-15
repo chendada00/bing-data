@@ -2393,6 +2393,15 @@ function migrateRecordsByIdentity(local, sources, changedFiles) {
     for (const item of data.items) {
       if (!item || !isValidDate(item.date)) continue
 
+      const date = normalizeDate(item.date)
+
+      // 不允许把日期范围以外的记录作为迁移对象。
+      if (!isDateInRange(date)) continue
+
+      if (YEAR !== 'all' && !date.startsWith(`${YEAR}-`)) {
+        continue
+      }
+
       localItems.push({
         item,
         file,
@@ -2781,6 +2790,15 @@ async function runSwitchImageUrl(
       localRecord
     ] of local.records
   ) {
+
+    if (!isDateInRange(date)) {
+      continue
+    }
+
+    if (YEAR !== 'all' && !date.startsWith(`${YEAR}-`)) {
+      continue
+    }
+
     const source =
       sourceMap.get(
         date
@@ -2999,6 +3017,23 @@ async function main() {
       ...yearRecords
     )
   }
+
+  const filteredSources = sources.filter(source => {
+    if (!isDateInRange(source.date)) {
+      return false
+    }
+
+    if (YEAR !== 'all' && !source.date.startsWith(`${YEAR}-`)) {
+      return false
+    }
+
+    return true
+  })
+
+  sources.length = 0
+  sources.push(...filteredSources)
+
+  log(`Filtered history records: ${sources.length}`)
 
   if (
     MODE === 'check'

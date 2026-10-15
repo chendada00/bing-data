@@ -14,26 +14,29 @@ on:
           - switch-image-url
 
       year:
-        description: "Target year, for example 2026, or all"
+        description: "目标年份，例如 2024；all 表示全部年份"
         required: true
         default: "2026"
+        type: string
 
       start_date:
-        description: "开始日期，格式 YYYY-MM-DD；留空表示不限制"
+        description: "开始日期 YYYY-MM-DD；留空表示不限制"
         required: false
         default: ""
         type: string
 
       end_date:
-        description: "结束日期，格式 YYYY-MM-DD；留空表示不限制"
+        description: "结束日期 YYYY-MM-DD；留空表示不限制"
         required: false
         default: ""
         type: string
 
       max_images:
-        description: "Maximum records to process. 0 = unlimited"
+        description: "最多处理图片数量；0 表示不限制"
         required: true
         default: "20"
+        type: string
+
       history_source_url:
         description: "完整历史数据 JSON 地址"
         required: true
@@ -41,7 +44,7 @@ on:
         type: string
 
       force_uhd:
-        description: "重新从 Bing 官方地址下载 UHD，并重新生成所有派生数据"
+        description: "重新下载官方 UHD 并重新生成派生数据"
         required: true
         default: false
         type: boolean
@@ -57,7 +60,6 @@ jobs:
   repair:
     name: Repair Bing Wallpaper History
     runs-on: ubuntu-latest
-
     timeout-minutes: 360
 
     env:
@@ -69,6 +71,174 @@ jobs:
         with:
           fetch-depth: 1
 
+      # 在检出 bing-uhd 之前完成所有输入校验，
+      # 并计算真正需要检出的目录。
+      - name: Validate inputs and calculate checkout scope
+        id: scope
+        shell: bash
+        env:
+          MODE: ${{ inputs.mode }}
+          YEAR: ${{ inputs.year }}
+          START_DATE: ${{ inputs.start_date }}
+          END_DATE: ${{ inputs.end_date }}
+          MAX_IMAGES: ${{ inputs.max_images }}
+        run: |
+          set -euo pipefail
+
+          YEAR="$(printf '%s' "$YEAR" | xargs)"
+          START_DATE="$(printf '%s' "$START_DATE" | xargs)"
+          END_DATE="$(printf '%s' "$END_DATE" | xargs)"
+          MAX_IMAGES="$(printf '%s' "$MAX_IMAGES" | xargs)"
+
+          if [[ ! "$YEAR" =~ ^([0-9]{4}|all)$ ]]; then
+            echo "::error::year 必须是四位年份或 all"
+            exit 1
+          fi
+
+          if [[ ! "$MAX_IMAGES" =~ ^[0-9]+$ ]]; then
+            echo "::error::max_images 必须是非负整数"
+            exit 1
+          fi
+
+          if [[ "$MODE" != "check" &&
+                "$MODE" != "repair" &&
+                "$MODE" != "switch-image-url" ]]; then
+            echo "::error::不支持的 mode: $MODE"
+            exit 1
+          fi
+
+          validate_date() {
+            local value="$1"
+            local name="$2"
+
+            [[ -z "$value" ]] && return 0
+
+            if [[ ! "$value" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "::error::$name 必须使用 YYYY-MM-DD 格式"
+              return 1
+            fi
+
+            # GNU date 会将部分无效日期自动归一化，
+            # 因此必须同时检查解析结果和格式化后的原值。
+            local parsed
+            parsed="$(date -u -d "$value" +%F 2>/dev/null)" || {
+              echo "::error::$name 不是有效日期: $value"
+              return 1
+            }
+
+            if [[ "$parsed" != "$value" ]]; then
+              echo "::error::$name 不是有效日期: $value"
+              return 1
+            fi
+          }
+
+          validate_date "$START_DATE" "start_date"
+          validate_date "$END_DATE" "end_date"
+
+          if [[ -n "$START_DATE" && -n "$END_DATE" &&
+                "$START_DATE" > "$END_DATE" ]]; then
+            echo "::error::start_date 不能晚于 end_date"
+            exit 1
+          fi
+
+          # 保留现有脚本对 YEAR 的约束：
+          # 指定单一年份时，输入的日期也必须属于该年。
+          if [[ "$YEAR" != "all" ]]; then
+            if [[ -n "$START_DATE" &&
+                  "${START_DATE:0:4}" != "$YEAR" ]]; then
+              echo "::error::start_date 与 year 不一致"
+              exit 1
+            fi
+
+            if [[ -n "$END_DATE" &&
+                  "${END_DATE:0:4}" != "$YEAR" ]]; then
+              echo "::error::end_date 与 year 不一致"
+              exit 1
+            fi
+          fi
+
+          PATHS=()
+          FULL_CHECKOUT="false"
+
+          add_months_between() {
+            local start="$1"
+            local end="$2"
+            local current
+            local last
+            local guard=0
+
+            current="${start:0:7}-01"
+            last="${end:0:7}-01"
+
+            while [[ "$current" < "$last" ||
+                     "$current" == "$last" ]]; do
+              PATHS+=("images/${current:0:4}/${current:5:2}")
+
+              current="$(date -u -d "$current +1 month" +%F)"
+              guard=$((guard + 1))
+
+              # 防止异常输入导致意外的无限循环。
+              if (( guard > 1200 )); then
+                echo "::error::日期跨度异常，拒绝继续"
+                exit 1
+              fi
+            done
+          }
+
+          if [[ -n "$START_DATE" && -n "$END_DATE" ]]; then
+            # 明确的起止日期：只检出覆盖到的月份。
+            add_months_between "$START_DATE" "$END_DATE"
+
+          elif [[ "$YEAR" != "all" ]]; then
+            # 单一年份：只检出该年的目录。
+            # 如果只给了一个日期，仍检出该年，
+            # 具体处理日期由 repair-history.js 控制。
+            PATHS+=("images/$YEAR")
+
+          else
+            # YEAR=all 且日期不完整时，不能凭空推断另一端边界。
+            # YEAR=all 且两个日期都为空时，也代表全历史操作。
+            FULL_CHECKOUT="true"
+          fi
+
+          # 去重，防止生成重复目录。
+          if (( ${#PATHS[@]} > 0 )); then
+            mapfile -t PATHS < <(
+              printf '%s\n' "${PATHS[@]}" | sort -u
+            )
+          fi
+
+          {
+            echo "year=$YEAR"
+            echo "start_date=$START_DATE"
+            echo "end_date=$END_DATE"
+            echo "full_checkout=$FULL_CHECKOUT"
+            echo "sparse_paths<<SPARSE_PATHS_EOF"
+            printf '%s\n' "${PATHS[@]}"
+            echo "SPARSE_PATHS_EOF"
+          } >> "$GITHUB_OUTPUT"
+
+          {
+            echo "## 历史迁移范围"
+            echo "- 模式：$MODE"
+            echo "- 年份：$YEAR"
+            echo "- 开始日期：${START_DATE:-不限}"
+            echo "- 结束日期：${END_DATE:-不限}"
+
+            if [[ "$FULL_CHECKOUT" == "true" ]]; then
+              echo "- UHD 检出：完整历史"
+            else
+              echo "- UHD 检出目录："
+              printf '  - `%s`\n' "${PATHS[@]}"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+          echo "Validated input successfully."
+          echo "YEAR=$YEAR"
+          echo "START_DATE=${START_DATE:-unbounded}"
+          echo "END_DATE=${END_DATE:-unbounded}"
+          echo "FULL_CHECKOUT=$FULL_CHECKOUT"
+
       - name: Checkout bing-uhd
         uses: actions/checkout@v4
         with:
@@ -76,13 +246,16 @@ jobs:
           token: ${{ secrets.BING_UHD_TOKEN }}
           path: bing-uhd
           fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: ${{ steps.scope.outputs.sparse_paths }}
+          sparse-checkout-cone-mode: true
 
       - name: Load environment
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
-          if [ ! -f .env ]; then
+          if [[ ! -f .env ]]; then
             echo "::error::.env file not found"
             exit 1
           fi
@@ -91,24 +264,18 @@ jobs:
           source .env
           set +a
 
-          if [ -z "$PREVIEW_BASE_URL" ]; then
-            echo "::error::PREVIEW_BASE_URL is not configured"
-            exit 1
-          fi
+          for name in PREVIEW_BASE_URL IMAGE_BASE_URL HISTORY_SOURCE_BASE_URL; do
+            if [[ -z "${!name:-}" ]]; then
+              echo "::error::$name is not configured"
+              exit 1
+            fi
+          done
 
-          if [ -z "$IMAGE_BASE_URL" ]; then
-            echo "::error::IMAGE_BASE_URL is not configured"
-            exit 1
-          fi
-
-          if [ -z "$HISTORY_SOURCE_BASE_URL" ]; then
-            echo "::error::HISTORY_SOURCE_BASE_URL is not configured"
-            exit 1
-          fi
-
-          echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL" >> "$GITHUB_ENV"
-          echo "IMAGE_BASE_URL=$IMAGE_BASE_URL" >> "$GITHUB_ENV"
-          echo "HISTORY_SOURCE_BASE_URL=$HISTORY_SOURCE_BASE_URL" >> "$GITHUB_ENV"
+          {
+            echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL"
+            echo "IMAGE_BASE_URL=$IMAGE_BASE_URL"
+            echo "HISTORY_SOURCE_BASE_URL=$HISTORY_SOURCE_BASE_URL"
+          } >> "$GITHUB_ENV"
 
       - name: Setup Node.js
         uses: actions/setup-node@v4
@@ -118,6 +285,7 @@ jobs:
       - name: Install dependencies
         shell: bash
         run: |
+          set -euo pipefail
           npm init -y
           npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1
 
@@ -125,66 +293,81 @@ jobs:
         shell: bash
         env:
           MODE: ${{ inputs.mode }}
-          YEAR: ${{ inputs.year }}
-          START_DATE: ${{ inputs.start_date }}
-          END_DATE: ${{ inputs.end_date }}
+          YEAR: ${{ steps.scope.outputs.year }}
+          START_DATE: ${{ steps.scope.outputs.start_date }}
+          END_DATE: ${{ steps.scope.outputs.end_date }}
           MAX_IMAGES: ${{ inputs.max_images }}
           FORCE_UHD: ${{ inputs.force_uhd }}
           UHD_ROOT: bing-uhd
           HISTORY_SOURCE_URL: ${{ inputs.history_source_url }}
         run: |
-          set -e
-      
+          set -euo pipefail
+
           echo "Current directory:"
           pwd
-      
-          echo "Checking bing-uhd:"
-          ls -la bing-uhd
-          ls -la bing-uhd/images || true
-      
+
+          echo "Selected UHD checkout:"
+          git -C bing-uhd rev-parse --short HEAD
+          git -C bing-uhd sparse-checkout list || true
+
           node scripts/repair-history.js
 
       - name: Commit bing-uhd
         if: inputs.mode == 'repair'
         shell: bash
+        env:
+          FULL_CHECKOUT: ${{ steps.scope.outputs.full_checkout }}
+          SPARSE_PATHS: ${{ steps.scope.outputs.sparse_paths }}
         run: |
-          set -e
+          set -euo pipefail
 
           cd bing-uhd
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add images/
+          if [[ "$FULL_CHECKOUT" == "true" ]]; then
+            git add -A -- images/
+          else
+            while IFS= read -r dir; do
+              [[ -z "$dir" ]] && continue
+              git add -A -- "$dir"
+            done <<< "$SPARSE_PATHS"
+          fi
 
           if git diff --cached --quiet; then
             echo "No UHD changes."
             exit 0
           fi
 
+          git diff --cached --stat
           git commit -m "chore: repair historical UHD images"
-          git push origin HEAD:${GITHUB_REF_NAME}
+
+          # 历史 UHD 仓库使用 main 分支作为目标分支。
+          git push origin HEAD:main
 
       - name: Commit bing-data
         if: inputs.mode == 'repair' || inputs.mode == 'switch-image-url'
         shell: bash
         run: |
-          set -e
+          set -euo pipefail
 
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
-          git add data/ preview/
+          git add -A -- data/ preview/
 
           if git diff --cached --quiet; then
             echo "No bing-data changes."
             exit 0
           fi
 
-          if [ "${{ inputs.mode }}" = "switch-image-url" ]; then
+          git diff --cached --stat
+
+          if [[ "${{ inputs.mode }}" == "switch-image-url" ]]; then
             git commit -m "chore: switch historical image URLs to UHD repository"
           else
             git commit -m "chore: repair historical wallpaper data"
           fi
 
-          git push origin HEAD:${GITHUB_REF_NAME}
+          git push origin "HEAD:${GITHUB_REF_NAME}"
