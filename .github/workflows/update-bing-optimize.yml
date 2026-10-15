@@ -1,5 +1,5 @@
 
-name: Update Bing Wallpaper
+name: Update Bing Wallpaper optimize
 
 on:
   workflow_dispatch:
