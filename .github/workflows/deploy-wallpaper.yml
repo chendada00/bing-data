@@ -38,7 +38,7 @@ jobs:
           EVENT_NAME: ${{ github.event_name }}
           BEFORE_SHA: ${{ github.event.before }}
           CURRENT_SHA: ${{ github.sha }}
-          FORCE_DEPLOY: ${{ inputs.force_deploy || false }}
+          FORCE_DEPLOY: ${{ inputs.force_deploy }}
         run: |
           set -euo pipefail
 
@@ -50,31 +50,38 @@ jobs:
                 "$BEFORE_SHA" "$CURRENT_SHA")"
             fi
           else
+            # 手动运行时展示 HEAD 最近一次提交的文件，
+            # 但不会仅因为这些文件属于 data/ 就自动部署。
             FILES="$(git diff-tree \
               --no-commit-id --name-only -r "$CURRENT_SHA")"
           fi
 
           if [[ -z "$FILES" ]]; then
-            DISPLAY_FILES="未检测到文件变更（可能是手动触发）"
+            DISPLAY_FILES="未检测到文件变更"
             FILE_COUNT=0
           else
             DISPLAY_FILES="$FILES"
-            FILE_COUNT="$(printf '%s\n' "$FILES" | wc -l | tr -d ' ')"
+            FILE_COUNT="$(printf '%s\n' "$FILES" |
+              wc -l | tr -d ' ')"
           fi
 
           DEPLOY_REQUIRED="false"
 
-          while IFS= read -r file; do
-            [[ -z "$file" ]] && continue
+          # 只有 push 事件才根据文件路径自动部署。
+          if [[ "$EVENT_NAME" == "push" ]]; then
+            while IFS= read -r file; do
+              [[ -z "$file" ]] && continue
 
-            case "$file" in
-              data/*|preview/*)
-                DEPLOY_REQUIRED="true"
-                break
-                ;;
-            esac
-          done <<< "$FILES"
+              case "$file" in
+                data/*)
+                  DEPLOY_REQUIRED="true"
+                  break
+                  ;;
+              esac
+            done <<< "$FILES"
+          fi
 
+          # 手动运行只有显式选择强制部署才会部署。
           if [[ "$EVENT_NAME" == "workflow_dispatch" ]] &&
              [[ "$FORCE_DEPLOY" == "true" ]]; then
             DEPLOY_REQUIRED="true"
@@ -182,6 +189,7 @@ jobs:
           FILE_COUNT: ${{ steps.changes.outputs.file_count }}
           DEPLOY_REQUIRED: ${{ steps.changes.outputs.deploy_required }}
           DEPLOY_OUTCOME: ${{ steps.deploy.outcome }}
+          CHANGES_OUTCOME: ${{ steps.changes.outcome }}
           RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
@@ -191,7 +199,9 @@ jobs:
             exit 0
           fi
 
-          if [[ "$DEPLOY_REQUIRED" == "true" ]]; then
+          if [[ "$CHANGES_OUTCOME" != "success" ]]; then
+            DEPLOY_STATUS="变更分析失败，请检查工作流日志"
+          elif [[ "$DEPLOY_REQUIRED" == "true" ]]; then
             if [[ "$DEPLOY_OUTCOME" == "success" ]]; then
               DEPLOY_STATUS="已成功发送部署触发请求"
             else
