@@ -434,16 +434,14 @@ function requestBuffer(url, retry = 0) {
   })
 }
 
+
+
 async function downloadImage(url) {
-  log(`Downloading UHD: ${url}`)
+  log(`Downloading image: ${url}`)
 
-  const buffer =
-    await requestBuffer(url)
+  const buffer = await requestBuffer(url)
 
-  if (
-    !buffer ||
-    buffer.length < 100 * 1024
-  ) {
+  if (!buffer || buffer.length < 10 * 1024) {
     throw new Error(
       `Downloaded image is too small: ${
         buffer ? buffer.length : 0
@@ -451,8 +449,151 @@ async function downloadImage(url) {
     )
   }
 
-  return buffer
+  // 这里先确认是可解码的有效图片。
+  // 不再要求所有下载结果都必须是 UHD。
+  const info = await validateImageBuffer(buffer)
+
+  return {
+    buffer,
+    ...info,
+    sourceUrl: url
+  }
 }
+
+function buildFallbackImageUrls(source) {
+  const candidates = []
+
+  // 优先尝试历史记录中已经提供的完整图片 URL。
+  if (typeof source.url === 'string' && source.url.trim()) {
+    candidates.push(source.url.trim())
+  }
+
+  // 如果 urlbase 是 Bing 图片路径，再尝试常见的普通尺寸。
+  if (typeof source.urlbase === 'string' && source.urlbase.trim()) {
+    const raw = source.urlbase.trim()
+
+    try {
+      const url = raw.startsWith('http://') ||
+        raw.startsWith('https://')
+        ? new URL(raw)
+        : new URL(
+            raw.startsWith('/') ? raw : `/${raw}`,
+            'https://www.bing.com'
+          )
+
+      const pathname = url.pathname
+        .replace(/_(?:UHD|1920x1080|1366x768)\.jpg$/i, '')
+
+      for (const size of ['1920x1080', '1366x768']) {
+        const fallback = new URL(url.toString())
+        fallback.pathname = `${pathname}_${size}.jpg`
+        candidates.push(fallback.toString())
+      }
+    } catch (error) {
+      log(`Cannot construct fallback URL: ${error.message}`)
+    }
+  }
+
+  // 去重，并排除 UHD 地址，避免重复下载同一个失败来源。
+  return [...new Set(candidates)].filter(url =>
+    typeof url === 'string' &&
+    /^https?:\/\//i.test(url) &&
+    !/_UHD\.jpg(?:\?.*)?$/i.test(url)
+  )
+}
+
+async function obtainUhd(source, date, forceDownload = false) {
+  const uhdFile = buildUhdFile(date)
+
+  const existing = await loadImageFromFile(uhdFile)
+
+  if (existing && !forceDownload) {
+    log(
+      `Using existing image: ${date} ` +
+      `(${existing.width}x${existing.height})`
+    )
+
+    return {
+      ...existing,
+      file: uhdFile,
+      sourceUrl: null,
+      downloaded: false
+    }
+  }
+
+  const officialUrl = buildOfficialUhdUrl(source.urlbase)
+  const attempts = []
+
+  if (officialUrl) {
+    attempts.push({
+      url: officialUrl,
+      label: 'official UHD'
+    })
+  }
+
+  for (const url of buildFallbackImageUrls(source)) {
+    if (url !== officialUrl) {
+      attempts.push({
+        url,
+        label: 'fallback'
+      })
+    }
+  }
+
+  const errors = []
+  let result = null
+
+  for (const attempt of attempts) {
+    try {
+      const downloaded = await downloadImage(attempt.url)
+
+      if (downloaded.isUhd) {
+        log(
+          `UHD image accepted: ${date} ` +
+          `(${downloaded.width}x${downloaded.height})`
+        )
+      } else {
+        log(
+          `Fallback image accepted: ${date} ` +
+          `(${downloaded.width}x${downloaded.height})`
+        )
+      }
+
+      result = {
+        ...downloaded,
+        sourceUrl: attempt.url,
+        downloaded: true
+      }
+
+      break
+    } catch (error) {
+      const message =
+        `${attempt.label} failed (${attempt.url}): ${error.message}`
+
+      errors.push(message)
+      log(message)
+    }
+  }
+
+  if (!result) {
+    throw new Error(
+      `Unable to obtain an image for ${date}. ` +
+      errors.join(' | ')
+    )
+  }
+
+  fs.mkdirSync(path.dirname(uhdFile), {
+    recursive: true
+  })
+
+  fs.writeFileSync(uhdFile, result.buffer)
+
+  return {
+    ...result,
+    file: uhdFile
+  }
+}
+
 
 async function readImageInfo(buffer) {
   const image =
@@ -465,60 +606,76 @@ async function readImageInfo(buffer) {
   }
 }
 
-function isValidUhdDimension(
-  width,
-  height
-) {
+
+function isValidUhdDimension(width, height) {
   return (
     Number(width) >= MIN_UHD_WIDTH &&
     Number(height) >= MIN_UHD_HEIGHT
   )
 }
 
-async function validateUhdBuffer(
-  buffer
-) {
-  const info =
-    await readImageInfo(buffer)
+// 普通图片也允许存入 bing-uhd。
+// 只接受能够解码、且至少为 1280x720 的图片。
+function isValidImageDimension(width, height) {
+  return (
+    Number(width) >= 1280 &&
+    Number(height) >= 720
+  )
+}
+
+async function validateImageBuffer(buffer) {
+  if (!Buffer.isBuffer(buffer) || buffer.length === 0) {
+    throw new Error('Image buffer is empty')
+  }
+
+  const image = await Jimp.read(buffer)
+  const width = image.bitmap.width
+  const height = image.bitmap.height
+
+  if (!isValidImageDimension(width, height)) {
+    throw new Error(
+      `Invalid image dimensions: ${width}x${height}`
+    )
+  }
 
   return {
-    ...info,
-    valid: isValidUhdDimension(
-      info.width,
-      info.height
-    ),
+    image,
+    width,
+    height,
+    valid: true,
+    isUhd: isValidUhdDimension(width, height),
     exact:
-      info.width === EXPECTED_UHD_WIDTH &&
-      info.height === EXPECTED_UHD_HEIGHT
+      width === EXPECTED_UHD_WIDTH &&
+      height === EXPECTED_UHD_HEIGHT
   }
 }
 
-async function loadImageFromFile(
-  file
-) {
+// 保留旧函数名，避免影响现有调用处。
+async function validateUhdBuffer(buffer) {
+  return validateImageBuffer(buffer)
+}
+
+async function loadImageFromFile(file) {
   if (!fs.existsSync(file)) {
     return null
   }
 
   try {
-    const buffer =
-      fs.readFileSync(file)
-
-    const result =
-      await validateUhdBuffer(buffer)
-
-    if (!result.valid) {
-      return null
-    }
+    const buffer = fs.readFileSync(file)
+    const result = await validateImageBuffer(buffer)
 
     return {
       ...result,
       buffer
     }
-  } catch {
+  } catch (error) {
+    log(
+      `Invalid local image ${file}: ${error.message}`
+    )
     return null
   }
 }
+
 
 async function getBase64(
   imageBuffer
@@ -729,27 +886,37 @@ function isValidCopyrightLink(
     return false
   }
 }
+ 
 
-function isOfficialUhdUrl(
-  value
-) {
+function isOfficialUhdUrl(value) {
   return (
     typeof value === 'string' &&
-    /_UHD\.jpg(?:\?.*)?$/i.test(
-      value
-    )
+    /_UHD\.jpg(?:\?.*)?$/i.test(value)
   )
 }
 
-function isValidSourceImage(
-  value
-) {
-  return (
-    isOfficialUhdUrl(value) &&
-    /^https?:\/\/(?:www|cn)\.bing\.com\//i.test(
-      value
+function isValidSourceImage(value) {
+  if (typeof value !== 'string' || !value.trim()) {
+    return false
+  }
+
+  try {
+    const url = new URL(value)
+
+    if (
+      url.protocol !== 'https:' &&
+      url.protocol !== 'http:'
+    ) {
+      return false
+    }
+
+    return (
+      /^(?:www|cn)\.bing\.com$/i.test(url.hostname) &&
+      /\/th\?/i.test(url.pathname)
     )
-  )
+  } catch {
+    return false
+  }
 }
 
 
@@ -1512,85 +1679,6 @@ async function getExistingImageBuffer(
   return null
 }
 
-async function obtainUhd(
-  source,
-  date,
-  forceDownload = false
-) {
-  const uhdFile =
-    buildUhdFile(
-      date
-    )
-
-  const existing =
-    await loadImageFromFile(
-      uhdFile
-    )
-
-  if (
-    existing &&
-    !forceDownload
-  ) {
-    return {
-      ...existing,
-      buffer:
-        existing.buffer,
-      file: uhdFile,
-      sourceUrl:
-        buildOfficialUhdUrl(
-          source.urlbase
-        ),
-      downloaded: false
-    }
-  }
-
-  const officialUrl =
-    buildOfficialUhdUrl(
-      source.urlbase
-    )
-
-  if (!officialUrl) {
-    throw new Error(
-      'Official UHD URL cannot be constructed.'
-    )
-  }
-
-  const buffer =
-    await downloadImage(
-      officialUrl
-    )
-
-  const validated =
-    await validateUhdBuffer(
-      buffer
-    )
-
-  if (!validated.valid) {
-    throw new Error(
-      `Official UHD image is not large enough: ${validated.width}x${validated.height}`
-    )
-  }
-
-  fs.mkdirSync(
-    path.dirname(uhdFile),
-    {
-      recursive: true
-    }
-  )
-
-  fs.writeFileSync(
-    uhdFile,
-    buffer
-  )
-
-  return {
-    ...validated,
-    buffer,
-    file: uhdFile,
-    sourceUrl: officialUrl,
-    downloaded: true
-  }
-}
 
 async function repairExistingItem(
   item,
@@ -1692,13 +1780,14 @@ async function repairExistingItem(
     changed = true
   }
 
+  const officialUhdUrl =
+    buildOfficialUhdUrl(source.urlbase)
+
   if (
     officialUhdUrl &&
     item.sourceImage !== officialUhdUrl
   ) {
-    item.sourceImage =
-      officialUhdUrl
-
+    item.sourceImage = officialUhdUrl
     changed = true
   }
 
@@ -1708,7 +1797,13 @@ async function repairExistingItem(
       date,
       options.forceUhd === true
     )
-
+  if (
+    uhd.sourceUrl &&
+    item.sourceImage !== uhd.sourceUrl
+  ) {
+    item.sourceImage = uhd.sourceUrl
+    changed = true
+  }
   if (uhd.downloaded) {
     log(
       `UHD refreshed: ${date} (${uhd.width}x${uhd.height})`
@@ -1816,25 +1911,12 @@ async function createMissingItem(
       options?.forceUhd === true
     )
 
-  const image =
-    await Jimp.read(
-      uhd.buffer
-    )
+  const base64 = await getBase64(uhd.buffer)
 
-  const base64 =
-    await getBase64(
-      uhd.buffer
-    )
+  const color = await getMainColors(uhd.buffer)
 
-  const color =
-    await getMainColors(
-      uhd.buffer
-    )
-
-  const colorHistogram =
-    await getColorHistogram(
-      image
-    )
+  const image = await Jimp.read(uhd.buffer)
+  const colorHistogram = await getColorHistogram(image)
 
   const previewFile =
     path.join(
@@ -1903,8 +1985,7 @@ async function createMissingItem(
         date
       ),
 
-    sourceImage:
-      officialUhdUrl,
+    sourceImage: uhd.sourceUrl || buildOfficialUhdUrl(source.urlbase),
 
     base64,
 
