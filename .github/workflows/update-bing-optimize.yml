@@ -1,0 +1,180 @@
+
+name: Update Bing Wallpaper
+
+on:
+  workflow_dispatch:
+  #schedule:
+    # 每天中国时间 15:02（UTC 07:02）
+    #- cron: '2 7 * * *'
+    # 每天中国时间 00:02（UTC 16:02）
+    #- cron: '2 16 * * *'
+    # 每天 UTC 时间 00:02
+    #- cron: '2 0 * * *'
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bing-wallpaper-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    name: Download Bing Wallpaper
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    env:
+      TZ: Asia/Shanghai
+
+    steps:
+      # 1. 检出 bing-data
+      - name: Checkout bing-data
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
+          fetch-depth: 1
+
+      # 2. 先获取当天壁纸日期
+      # 后面根据年份和月份稀疏检出 bing-uhd
+      - name: Resolve current Bing wallpaper date
+        id: bing_date
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          API_URL="https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN"
+
+          RESPONSE="$(curl -fsSL \
+            --retry 3 \
+            --connect-timeout 10 \
+            --max-time 30 \
+            "$API_URL")"
+
+          RAW_DATE="$(printf '%s' "$RESPONSE" |
+            jq -er '.images[0].enddate |
+              select(type == "string" and test("^[0-9]{8}$"))')"
+
+          YEAR="${RAW_DATE:0:4}"
+          MONTH="${RAW_DATE:4:2}"
+          DATE="${YEAR}-${MONTH}-${RAW_DATE:6:2}"
+
+          echo "year=$YEAR" >> "$GITHUB_OUTPUT"
+          echo "month=$MONTH" >> "$GITHUB_OUTPUT"
+          echo "date=$DATE" >> "$GITHUB_OUTPUT"
+
+          echo "Bing wallpaper date: $DATE"
+          echo "UHD directory: images/$YEAR/$MONTH"
+
+      # 3. 稀疏检出 bing-uhd
+      # 只检出当天壁纸所属月份，而不是全部历史图片
+      - name: Checkout bing-uhd
+        uses: actions/checkout@v4
+        with:
+          repository: chendada00/bing-uhd
+          token: ${{ secrets.BING_UHD_TOKEN }}
+          path: bing-uhd
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: |
+            images/${{ steps.bing_date.outputs.year }}/${{ steps.bing_date.outputs.month }}
+          sparse-checkout-cone-mode: true
+
+      # 4. 加载环境变量
+      - name: Load environment
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [ ! -f .env ]; then
+            echo "::error::.env file not found"
+            exit 1
+          fi
+
+          set -a
+          source .env
+          set +a
+
+          if [ -z "${PREVIEW_BASE_URL:-}" ]; then
+            echo "::error::PREVIEW_BASE_URL is not configured"
+            exit 1
+          fi
+
+          if [ -z "${IMAGE_BASE_URL:-}" ]; then
+            echo "::error::IMAGE_BASE_URL is not configured"
+            exit 1
+          fi
+
+          {
+            echo "PREVIEW_BASE_URL=$PREVIEW_BASE_URL"
+            echo "IMAGE_BASE_URL=$IMAGE_BASE_URL"
+          } >> "$GITHUB_ENV"
+
+      # 5. 安装 Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      # 6. 安装依赖
+      - name: Install dependencies
+        run: |
+          npm init -y
+          npm install jimp@0.16.1 node-vibrant@3.2.1-alpha.1
+
+      # 7. 下载并处理壁纸
+      - name: Download and process Bing wallpaper
+        run: |
+          node scripts/update-bing.js
+
+      # 8. 只提交当天的 UHD 图片
+      - name: Commit and push bing-uhd
+        working-directory: bing-uhd
+        shell: bash
+        env:
+          YEAR: ${{ steps.bing_date.outputs.year }}
+          MONTH: ${{ steps.bing_date.outputs.month }}
+          DATE: ${{ steps.bing_date.outputs.date }}
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          IMAGE_PATH="images/$YEAR/$MONTH/$DATE.jpg"
+
+          if [ ! -f "$IMAGE_PATH" ]; then
+            echo "::error::Expected UHD image not found: $IMAGE_PATH"
+            exit 1
+          fi
+
+          git add -- "$IMAGE_PATH"
+
+          if git diff --cached --quiet; then
+            echo "No bing-uhd changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update Bing UHD wallpaper"
+
+          git push origin HEAD:main
+
+      # 9. 提交 bing-data 的 JSON、索引和预览图
+      - name: Commit and push bing-data
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- data/ preview/
+
+          if git diff --cached --quiet; then
+            echo "No bing-data changes to commit."
+            exit 0
+          fi
+
+          git commit -m "Update Bing wallpaper"
+
+          git push origin "HEAD:${GITHUB_REF_NAME}"
