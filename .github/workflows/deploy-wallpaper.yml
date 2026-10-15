@@ -1,0 +1,219 @@
+
+name: Deploy Bing Wallpaper
+
+on:
+  workflow_dispatch:
+
+  push:
+    paths:
+      - "data/**"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy-bing-wallpaper
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Notify and trigger deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout bing-data
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Collect update information
+        id: changes
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BEFORE_SHA: ${{ github.event.before }}
+          CURRENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "push" ]] &&
+             [[ "$BEFORE_SHA" =~ ^0+$ ]]; then
+            BEFORE_SHA=""
+          fi
+
+          if [[ "$EVENT_NAME" == "push" ]] &&
+             [[ -n "$BEFORE_SHA" ]]; then
+            FILES="$(git diff --name-only \
+              "$BEFORE_SHA" "$CURRENT_SHA" -- data/)"
+          else
+            FILES="$(git diff-tree \
+              --no-commit-id --name-only -r HEAD -- data/)"
+          fi
+
+          if [[ -z "$FILES" ]]; then
+            FILES="未检测到 data/ 文件变更（手动触发或合并提交）"
+            FILE_COUNT=0
+          else
+            FILE_COUNT="$(printf '%s\n' "$FILES" | wc -l | tr -d ' ')"
+          fi
+
+          {
+            echo "files<<CHANGE_FILES_EOF"
+            printf '%s\n' "$FILES"
+            echo "CHANGE_FILES_EOF"
+            echo "file_count=$FILE_COUNT"
+          } >> "$GITHUB_OUTPUT"
+
+          echo "### Data changes" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Changed files: $FILE_COUNT" >> "$GITHUB_STEP_SUMMARY"
+          echo '```text' >> "$GITHUB_STEP_SUMMARY"
+          printf '%s\n' "$FILES" >> "$GITHUB_STEP_SUMMARY"
+          echo '```' >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Trigger bing-wallpaper
+        id: deploy
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.DEPLOY_TRIGGER_TOKEN }}
+          TARGET_REPO: chendada00/bing-wallpaper
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_ACTOR: ${{ github.actor }}
+          SOURCE_EVENT: ${{ github.event_name }}
+          CHANGE_FILES: ${{ steps.changes.outputs.files }}
+          FILE_COUNT: ${{ steps.changes.outputs.file_count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${GH_TOKEN:-}" ]]; then
+            echo "::error::Missing DEPLOY_TRIGGER_TOKEN secret"
+            exit 1
+          fi
+
+          PAYLOAD="$(jq -n \
+            --arg event_type "data_updated" \
+            --arg source_sha "$SOURCE_SHA" \
+            --arg source_actor "$SOURCE_ACTOR" \
+            --arg source_event "$SOURCE_EVENT" \
+            --arg changed_files "$CHANGE_FILES" \
+            --arg file_count "$FILE_COUNT" \
+            --arg run_url "$RUN_URL" \
+            '{
+              event_type: $event_type,
+              client_payload: {
+                source_sha: $source_sha,
+                source_actor: $source_actor,
+                source_event: $source_event,
+                changed_files: $changed_files,
+                file_count: $file_count,
+                run_url: $run_url
+              }
+            }')"
+
+          HTTP_CODE="$(curl -sS \
+            -o /tmp/dispatch-response.json \
+            -w '%{http_code}' \
+            -X POST \
+            -H "Accept: application/vnd.github+json" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -H "Content-Type: application/json" \
+            "https://api.github.com/repos/$TARGET_REPO/dispatches" \
+            -d "$PAYLOAD")"
+
+          if [[ "$HTTP_CODE" != "204" ]]; then
+            echo "::error::repository_dispatch failed: HTTP $HTTP_CODE"
+            cat /tmp/dispatch-response.json
+            exit 1
+          fi
+
+          echo "Deployment trigger accepted by GitHub."
+          echo "HTTP status: $HTTP_CODE"
+
+      - name: Send PushPlus notification
+        if: always()
+        continue-on-error: true
+        shell: bash
+        env:
+          PUSHPLUS_TOKEN: ${{ secrets.PUSHPLUS_TOKEN }}
+          JOB_STATUS: ${{ job.status }}
+          SOURCE_SHA: ${{ github.sha }}
+          SOURCE_ACTOR: ${{ github.actor }}
+          SOURCE_EVENT: ${{ github.event_name }}
+          CHANGE_FILES: ${{ steps.changes.outputs.files }}
+          FILE_COUNT: ${{ steps.changes.outputs.file_count }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          DISPATCH_OUTCOME: ${{ steps.deploy.outcome }}
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${PUSHPLUS_TOKEN:-}" ]]; then
+            echo "PUSHPLUS_TOKEN not configured; skipping notification."
+            exit 0
+          fi
+
+          if [[ "$DISPATCH_OUTCOME" == "success" ]]; then
+            TITLE="Bing Wallpaper 更新部署已触发"
+            RESULT="GitHub 已接受重新部署触发请求。"
+          else
+            TITLE="Bing Wallpaper 部署触发失败"
+            RESULT="触发请求未成功，请查看 GitHub Actions 日志。"
+          fi
+
+          CONTENT="$(cat <<EOF
+          ## Bing Wallpaper 数据更新
+
+          - **结果：** $RESULT
+          - **触发方式：** $SOURCE_EVENT
+          - **操作人：** $SOURCE_ACTOR
+          - **数据提交：** \`$SOURCE_SHA\`
+          - **修改文件数：** ${FILE_COUNT:-0}
+
+          ### 本次修改文件
+
+          \`\`\`text
+          ${CHANGE_FILES:-未获取到文件列表}
+          \`\`\`
+
+          [查看 GitHub Actions 运行日志]($RUN_URL)
+
+          > 注意：触发请求成功不等于网站部署已经完成。
+          EOF
+          )"
+
+          BODY="$(jq -n \
+            --arg token "$PUSHPLUS_TOKEN" \
+            --arg title "$TITLE" \
+            --arg content "$CONTENT" \
+            '{
+              token: $token,
+              title: $title,
+              content: $content,
+              template: "markdown"
+            }')"
+
+          HTTP_CODE="$(curl -sS \
+            -o /tmp/pushplus-response.json \
+            -w '%{http_code}' \
+            --connect-timeout 10 \
+            --max-time 30 \
+            -X POST \
+            -H "Content-Type: application/json" \
+            "https://www.pushplus.plus/send" \
+            -d "$BODY")"
+
+          if [[ "$HTTP_CODE" -lt 200 || "$HTTP_CODE" -ge 300 ]]; then
+            echo "::warning::PushPlus HTTP error: $HTTP_CODE"
+            cat /tmp/pushplus-response.json
+            exit 1
+          fi
+
+          if ! jq -e '.code == 200' \
+            /tmp/pushplus-response.json >/dev/null; then
+            echo "::warning::PushPlus did not return code 200"
+            cat /tmp/pushplus-response.json
+            exit 1
+          fi
+
+          echo "PushPlus accepted the notification."
