@@ -1691,10 +1691,6 @@ async function repairExistingItem(
   const forceDerived =
     options.forceDerived === true
 
-  const officialUhdUrl =
-    buildOfficialUhdUrl(
-      source.urlbase
-    )
 
   if (
     source.title &&
