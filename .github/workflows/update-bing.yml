@@ -4,8 +4,6 @@ name: Update Bing Wallpaper
 on:
   workflow_dispatch:
   schedule:
-    # 每天中国时间 15:02（UTC 07:02）
-    - cron: '2 7 * * *'
     # 每天中国时间 00:02（UTC 16:02）
     - cron: '2 16 * * *'
     # 每天 UTC 时间 00:02
