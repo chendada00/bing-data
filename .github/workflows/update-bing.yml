@@ -6,8 +6,6 @@ on:
   schedule:
     # 每天中国时间 00:02（UTC 16:02）
     - cron: '2 16 * * *'
-    # 每天 UTC 时间 00:02
-    - cron: '2 0 * * *'
 
 permissions:
   contents: write
