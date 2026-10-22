@@ -104,18 +104,22 @@ function requestText(url, redirects = 0) {
 }
 
 function normalizeArchiveRecord(source, sourceName) {
-  const imageId = normalizeImageId(source.urlbase || source.url || source.bing_url)
+  const imageId = normalizeImageId(
+    source.urlbase || source.url || source.bing_url
+  )
+
   const record = {
     sourceName,
     date: normalizeDate(source.date || source.enddate),
     imageId,
     description: String(source.description || '').trim(),
-    copyright: String(source.copyright || '').trim(),
-    copyrightKeyword: String(source.copyrightKeyword || '').trim(),
-    copyrightLink: String(source.copyrightlink || source.copyrightLink || '').trim()
+    copyright: String(source.copyright || '').trim()
   }
 
-  if (!imageId || (!record.description && !record.copyright)) return null
+  if (!imageId || (!record.description && !record.copyright)) {
+    return null
+  }
+
   return record
 }
 
@@ -141,8 +145,10 @@ async function loadArchiveRecords() {
           byImageId.set(record.imageId, record)
         } else {
           // 同一图片优先补齐空字段，不覆盖已存在的高优先级非空字段。
-          for (const key of ['description', 'copyright', 'copyrightKeyword', 'copyrightLink']) {
-            if (!existing[key] && record[key]) existing[key] = record[key]
+          for (const key of ['description', 'copyright']) {
+            if (!existing[key] && record[key]) {
+              existing[key] = record[key]
+            }
           }
         }
       }
@@ -190,21 +196,21 @@ function getTargetImageId(item) {
 }
 
 function setIfDifferent(item, field, value, changedFields) {
-  if (typeof value !== 'string' || !value.trim() || item[field] === value) return
-  item[field] = value
-  changedFields.push(field)
-}
+  if (typeof value !== 'string') return
 
-function buildCopyrightLink(record) {
-  if (record.copyrightLink && /^https?:\/\//i.test(record.copyrightLink)) {
-    return record.copyrightLink
-  }
-  if (record.copyrightKeyword) {
-    return 'https://www.bing.com/search?q=' +
-      encodeURIComponent(record.copyrightKeyword) +
-      '&form=hpcapt&mkt=zh-cn'
-  }
-  return ''
+  const nextValue = value.trim()
+  if (!nextValue) return
+
+  const currentValue =
+    typeof item[field] === 'string'
+      ? item[field].trim()
+      : ''
+
+  // 忽略首尾空格差异；内容相同就不写入。
+  if (currentValue === nextValue) return
+
+  item[field] = nextValue
+  changedFields.push(field)
 }
 
 async function main() {
@@ -265,11 +271,19 @@ async function main() {
       matched++
       const changedFields = []
 
-      // Always compare all trusted fields; do not only repair blank descriptions.
-      setIfDifferent(item, 'description', archive.description, changedFields)
-      setIfDifferent(item, 'copyright', archive.copyright, changedFields)
-      setIfDifferent(item, 'copyrightKeyword', archive.copyrightKeyword, changedFields)
-      setIfDifferent(item, 'copyrightLink', buildCopyrightLink(archive), changedFields)
+      setIfDifferent(
+        item,
+        'description',
+        archive.description,
+        changedFields
+      )
+
+      setIfDifferent(
+        item,
+        'copyright',
+        archive.copyright,
+        changedFields
+      )
 
       if (changedFields.length) {
         updatedRecords++
@@ -284,8 +298,12 @@ async function main() {
     }
 
     if (changed && !DRY_RUN) {
-      data.updatedAt = new Date().toISOString()
-      fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n', 'utf8')
+      fs.writeFileSync(
+        file,
+        JSON.stringify(data, null, 2) + '\n',
+        'utf8'
+      )
+
       console.log('[已保存] ' + path.relative(process.cwd(), file))
     }
   }
