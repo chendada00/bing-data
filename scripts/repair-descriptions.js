@@ -1,19 +1,15 @@
-
-const fs = require('fs')
-const path = require('path')
-const https = require('https')
-const http = require('http')
-
+const fs = require('node:fs')
+const path = require('node:path')
+const https = require('node:https')
+const http = require('node:http')
 const { buildIndex } = require('./index')
 
 const DATA_ROOT = path.resolve('data')
-
 const YEAR = (process.env.YEAR || 'all').trim()
-const START_DATE = process.env.START_DATE || ''
-const END_DATE = process.env.END_DATE || ''
+const START_DATE = (process.env.START_DATE || '').trim()
+const END_DATE = (process.env.END_DATE || '').trim()
 const LIMIT = Number(process.env.LIMIT || 0)
-const FORCE = process.env.FORCE === 'true'
-const DELAY_MS = Number(process.env.DELAY_MS || 1000)
+const DRY_RUN = process.env.DRY_RUN === 'true'
 
 const SOURCES = [
   {
@@ -30,234 +26,148 @@ const SOURCES = [
   }
 ]
 
-function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
-}
-
 function normalizeDate(value) {
   const text = String(value || '').trim()
-
+  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) return text
   if (/^\d{8}$/.test(text)) {
-    return `${text.slice(0, 4)}-${text.slice(4, 6)}-${text.slice(6, 8)}`
+    return text.slice(0, 4) + '-' + text.slice(4, 6) + '-' + text.slice(6, 8)
   }
-
-  if (/^\d{4}-\d{2}-\d{2}$/.test(text)) {
-    return text
-  }
-
   return ''
 }
 
 function normalizeImageId(value) {
   if (!value) return ''
-
   let raw = String(value).trim()
 
   try {
     const parsed = new URL(raw, 'https://www.bing.com')
     raw = parsed.searchParams.get('id') || raw
-  } catch {
-    // 继续尝试原始字符串。
-  }
+  } catch {}
 
   try {
     raw = decodeURIComponent(raw)
-  } catch {
-    // 保留原始值。
-  }
+  } catch {}
 
   const match = raw.match(/OHR\.[^&?]+/i)
   if (!match) return ''
 
   return match[0].replace(
-    /_(?:\d{3,4}x\d{3,4}|UHD)(?:\.jpg|\.webp)?$/i,
+    /_(?:\d{3,4}x\d{3,4}|UHD)(?:\.jpg|\.jpeg|\.png|\.webp)?$/i,
     ''
   )
 }
 
 function getItems(data) {
   if (Array.isArray(data)) return data
-  if (Array.isArray(data?.images)) return data.images
-  if (Array.isArray(data?.data)) return data.data
+  if (Array.isArray(data && data.images)) return data.images
+  if (Array.isArray(data && data.data)) return data.data
   return []
-}
-
-function isBadDescription(item) {
-  const description = String(item.description || '').trim()
-  const copyright = String(item.copyright || '').trim()
-
-  return (
-    !description ||
-    description === copyright ||
-    /通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
-      description
-    )
-  )
-}
-
-function isUsableDescription(item, description) {
-  const text = String(description || '').trim()
-  const copyright = String(item.copyright || '').trim()
-
-  return (
-    text.length >= 20 &&
-    text !== copyright &&
-    !/通过必应的智能搜索|获得奖励|快速查找所需内容/i.test(
-      text
-    )
-  )
 }
 
 function requestText(url, redirects = 0) {
   return new Promise((resolve, reject) => {
     if (redirects > 5) {
-      reject(new Error('重定向次数过多'))
+      reject(new Error('重定向次数过多：' + url))
       return
     }
 
     const client = url.startsWith('https:') ? https : http
-
-    const req = client.get(
-      url,
-      {
-        headers: {
-          'User-Agent': 'bing-data-archive-repair',
-          Accept: 'application/json'
-        }
-      },
-      res => {
-        if (
-          res.statusCode >= 300 &&
-          res.statusCode < 400 &&
-          res.headers.location
-        ) {
-          res.resume()
-
-          requestText(
-            new URL(res.headers.location, url).toString(),
-            redirects + 1
-          ).then(resolve).catch(reject)
-
-          return
-        }
-
-        if (res.statusCode !== 200) {
-          res.resume()
-          reject(new Error(`HTTP ${res.statusCode}`))
-          return
-        }
-
-        const chunks = []
-
-        res.on('data', chunk => chunks.push(chunk))
-        res.on('end', () => {
-          resolve(Buffer.concat(chunks).toString('utf8'))
-        })
-        res.on('error', reject)
+    const req = client.get(url, {
+      headers: {
+        'User-Agent': 'bing-data-description-repair',
+        Accept: 'application/json'
       }
-    )
+    }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume()
+        requestText(new URL(res.headers.location, url).toString(), redirects + 1)
+          .then(resolve)
+          .catch(reject)
+        return
+      }
 
-    req.setTimeout(45000, () => {
-      req.destroy(new Error('请求超时'))
+      if (res.statusCode !== 200) {
+        res.resume()
+        reject(new Error('HTTP ' + res.statusCode + '：' + url))
+        return
+      }
+
+      const chunks = []
+      res.on('data', chunk => chunks.push(chunk))
+      res.on('end', () => resolve(Buffer.concat(chunks).toString('utf8')))
+      res.on('error', reject)
     })
 
+    req.setTimeout(45000, () => req.destroy(new Error('请求超时：' + url)))
     req.on('error', reject)
   })
 }
 
-async function loadArchiveSources() {
-  const allItems = []
-  const seen = new Set()
+function normalizeArchiveRecord(source, sourceName) {
+  const imageId = normalizeImageId(source.urlbase || source.url || source.bing_url)
+  const record = {
+    sourceName,
+    date: normalizeDate(source.date || source.enddate),
+    imageId,
+    description: String(source.description || '').trim(),
+    copyright: String(source.copyright || '').trim(),
+    copyrightKeyword: String(source.copyrightKeyword || '').trim(),
+    copyrightLink: String(source.copyrightlink || source.copyrightLink || '').trim()
+  }
+
+  if (!imageId || (!record.description && !record.copyright)) return null
+  return record
+}
+
+async function loadArchiveRecords() {
+  const byImageId = new Map()
 
   for (const source of SOURCES) {
     try {
-      console.log(`[归档] 正在读取：${source.name}`)
-
-      const text = await requestText(source.url)
-      const data = JSON.parse(text)
+      console.log('[归档] 正在读取：' + source.name)
+      const data = JSON.parse(await requestText(source.url))
       const items = getItems(data)
+      let accepted = 0
 
-      for (const item of items) {
-        const date = normalizeDate(item.date || item.enddate)
-        const imageId = normalizeImageId(
-          item.urlbase || item.url || item.bing_url
-        )
-        const description = String(
-          item.description || ''
-        ).trim()
+      for (const raw of items) {
+        const record = normalizeArchiveRecord(raw, source.name)
+        if (!record) continue
+        accepted++
 
-        if (!date || !isUsableDescription(item, description)) {
-          continue
+        // 只按图片 ID 关联字段，不按日期关联，防止相邻日期错位。
+        // SOURCES 按优先级排列：当前归档优先于历史归档。
+        const existing = byImageId.get(record.imageId)
+        if (!existing) {
+          byImageId.set(record.imageId, record)
+        } else {
+          // 同一图片优先补齐空字段，不覆盖已存在的高优先级非空字段。
+          for (const key of ['description', 'copyright', 'copyrightKeyword', 'copyrightLink']) {
+            if (!existing[key] && record[key]) existing[key] = record[key]
+          }
         }
-
-        const key = `${date}|${imageId || ''}|${description}`
-
-        if (seen.has(key)) continue
-        seen.add(key)
-
-        allItems.push({
-          source: source.name,
-          date,
-          imageId,
-          copyright: String(item.copyright || '').trim(),
-          description
-        })
       }
 
       console.log(
-        `[归档] ${source.name}：读取 ${items.length} 条，累计有效描述 ${allItems.length} 条`
+        '[归档] ' + source.name + '：读取 ' + items.length +
+        ' 条，识别 ' + accepted + ' 条带图片 ID 的记录'
       )
     } catch (error) {
-      console.error(
-        `[归档失败] ${source.name}：${error.message}`
-      )
+      console.error('[归档失败] ' + source.name + '：' + error.message)
     }
   }
 
-  return allItems
-}
-
-function findDescription(item, archiveItems) {
-  const date = normalizeDate(item.date)
-  const imageId = normalizeImageId(
-    item.urlbase || item.url || item.sourceImage
-  )
-  const copyright = String(item.copyright || '').trim()
-
-  const candidates = archiveItems.filter(entry => entry.date === date)
-
-  for (const entry of candidates) {
-    if (
-      imageId &&
-      entry.imageId &&
-      imageId !== entry.imageId
-    ) {
-      continue
-    }
-
-    if (
-      !entry.imageId &&
-      copyright &&
-      entry.copyright &&
-      copyright !== entry.copyright
-    ) {
-      continue
-    }
-
-    return entry.description
+  if (byImageId.size === 0) {
+    throw new Error('所有归档均未提供可用的图片 ID 数据，已停止修复')
   }
 
-  return ''
+  return byImageId
 }
 
 function collectMonthFiles(dir) {
   if (!fs.existsSync(dir)) return []
-
   const files = []
 
-  for (const entry of fs.readdirSync(dir, {
-    withFileTypes: true
-  })) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
     const fullPath = path.join(dir, entry.name)
 
     if (entry.isDirectory()) {
@@ -274,47 +184,63 @@ function collectMonthFiles(dir) {
   return files.sort()
 }
 
+function getTargetImageId(item) {
+  // sourceImage is the most explicit identity; image URL also contains OHR ID.
+  return normalizeImageId(item.sourceImage || item.urlbase || item.image || item.url)
+}
+
+function setIfDifferent(item, field, value, changedFields) {
+  if (typeof value !== 'string' || !value.trim() || item[field] === value) return
+  item[field] = value
+  changedFields.push(field)
+}
+
+function buildCopyrightLink(record) {
+  if (record.copyrightLink && /^https?:\/\//i.test(record.copyrightLink)) {
+    return record.copyrightLink
+  }
+  if (record.copyrightKeyword) {
+    return 'https://www.bing.com/search?q=' +
+      encodeURIComponent(record.copyrightKeyword) +
+      '&form=hpcapt&mkt=zh-cn'
+  }
+  return ''
+}
+
 async function main() {
   if (!Number.isInteger(LIMIT) || LIMIT < 0) {
     throw new Error('LIMIT 必须是非负整数')
   }
-
+  if (YEAR !== 'all' && !/^\d{4}$/.test(YEAR)) {
+    throw new Error('YEAR 必须是 all 或四位年份')
+  }
   if (START_DATE && !normalizeDate(START_DATE)) {
     throw new Error('START_DATE 格式必须为 YYYY-MM-DD')
   }
-
   if (END_DATE && !normalizeDate(END_DATE)) {
     throw new Error('END_DATE 格式必须为 YYYY-MM-DD')
   }
-
   if (START_DATE && END_DATE && START_DATE > END_DATE) {
     throw new Error('START_DATE 不能晚于 END_DATE')
   }
 
-  const archiveItems = await loadArchiveSources()
-
-  if (archiveItems.length === 0) {
-    throw new Error('所有 GitHub 归档都没有返回有效描述，停止修复')
-  }
-
-  const files = collectMonthFiles(DATA_ROOT).filter(file => {
-    if (YEAR === 'all') return true
-    return path.basename(path.dirname(file)) === YEAR
-  })
+  const archives = await loadArchiveRecords()
+  const files = collectMonthFiles(DATA_ROOT).filter(file =>
+    YEAR === 'all' || path.basename(path.dirname(file)) === YEAR
+  )
 
   let checked = 0
-  let updated = 0
-  let skipped = 0
-  let missing = 0
+  let matched = 0
+  let updatedRecords = 0
+  let updatedFields = 0
+  let missingMatch = 0
+  const unresolved = []
 
   for (const file of files) {
     if (LIMIT > 0 && checked >= LIMIT) break
 
-    const original = fs.readFileSync(file, 'utf8')
-    const data = JSON.parse(original)
-
+    const data = JSON.parse(fs.readFileSync(file, 'utf8'))
     if (!Array.isArray(data.items)) continue
-
     let changed = false
 
     for (const item of data.items) {
@@ -325,57 +251,68 @@ async function main() {
       if (START_DATE && date < START_DATE) continue
       if (END_DATE && date > END_DATE) continue
 
-      if (!FORCE && !isBadDescription(item)) {
-        skipped++
+      checked++
+      const imageId = getTargetImageId(item)
+      const archive = imageId ? archives.get(imageId) : null
+
+      if (!archive) {
+        missingMatch++
+        unresolved.push(date + ' (' + (imageId || 'no-image-id') + ')')
+        console.log('[未匹配] ' + date + '：归档中找不到相同图片 ID')
         continue
       }
 
-      checked++
+      matched++
+      const changedFields = []
 
-      const description = findDescription(item, archiveItems)
+      // Always compare all trusted fields; do not only repair blank descriptions.
+      setIfDifferent(item, 'description', archive.description, changedFields)
+      setIfDifferent(item, 'copyright', archive.copyright, changedFields)
+      setIfDifferent(item, 'copyrightKeyword', archive.copyrightKeyword, changedFields)
+      setIfDifferent(item, 'copyrightLink', buildCopyrightLink(archive), changedFields)
 
-      if (!description || !isUsableDescription(item, description)) {
-        console.log(`[无归档描述] ${date}`)
-        missing++
-      } else if (item.description === description) {
-        skipped++
-      } else {
-        // 只修改 description，不修改其他字段。
-        item.description = description
+      if (changedFields.length) {
+        updatedRecords++
+        updatedFields += changedFields.length
         changed = true
-        updated++
-
-        console.log(`[已更新] ${date}`)
-      }
-
-      if (DELAY_MS > 0) {
-        await sleep(DELAY_MS)
+        console.log(
+          '[' + (DRY_RUN ? '预览' : '修复') + '] ' + date + '：' +
+          changedFields.join(', ') + '（图片 ID ' + imageId +
+          '，来源 ' + archive.sourceName + '）'
+        )
       }
     }
 
-    if (changed) {
-      fs.writeFileSync(
-        file,
-        JSON.stringify(data, null, 2) + '\n',
-        'utf8'
-      )
-
-      console.log(`[已保存] ${path.relative(process.cwd(), file)}`)
+    if (changed && !DRY_RUN) {
+      data.updatedAt = new Date().toISOString()
+      fs.writeFileSync(file, JSON.stringify(data, null, 2) + '\n', 'utf8')
+      console.log('[已保存] ' + path.relative(process.cwd(), file))
     }
   }
 
-  if (updated > 0) {
-    buildIndex()
-  }
+  if (updatedRecords > 0 && !DRY_RUN) buildIndex()
 
-  console.log('========== GitHub 归档描述修复结果 ==========')
-  console.log(`检查记录：${checked}`)
-  console.log(`更新描述：${updated}`)
-  console.log(`跳过记录：${skipped}`)
-  console.log(`归档中没有有效描述：${missing}`)
+  console.log('')
+  console.log('========== 壁纸描述 / 版权修复结果 ==========')
+  console.log('模式：' + (DRY_RUN ? '只检查，不写入' : '修复并写入'))
+  console.log('检查记录：' + checked)
+  console.log('按图片 ID 匹配：' + matched)
+  console.log('修复记录数：' + updatedRecords)
+  console.log('修复字段数：' + updatedFields)
+  console.log('未匹配记录：' + missingMatch)
+
+  if (unresolved.length) {
+    console.log('未匹配日期（最多展示 100 条）：')
+    unresolved.slice(0, 100).forEach(line => console.log('- ' + line))
+  }
+  if (missingMatch && !DRY_RUN) {
+    console.warn(
+      '部分记录未能按图片 ID 匹配。为避免错配，脚本保留这些记录的原值，请根据清单核查。'
+    )
+  }
 }
 
 main().catch(error => {
-  console.error('历史描述修复失败：', error)
+  console.error('壁纸描述 / 版权修复失败：', error)
   process.exitCode = 1
 })

@@ -1,4 +1,4 @@
-name: 修复必应壁纸描述
+name: 修复必应壁纸描述与版权
 
 on:
   workflow_dispatch:
@@ -8,25 +8,23 @@ on:
         required: true
         default: 'all'
         type: string
-
       start_date:
         description: '开始日期，格式 YYYY-MM-DD；留空表示不限制'
         required: false
+        default: ''
         type: string
-
       end_date:
         description: '结束日期，格式 YYYY-MM-DD；留空表示不限制'
         required: false
+        default: ''
         type: string
-
       limit:
-        description: '最多处理多少条记录；0 表示不限制'
+        description: '最多检查多少条记录；0 表示不限制'
         required: true
         default: '0'
         type: string
-
-      force:
-        description: '是否强制重新获取所选范围内的所有描述'
+      dry_run:
+        description: '只检查并输出修复计划，不写入文件'
         required: true
         default: false
         type: boolean
@@ -40,16 +38,16 @@ concurrency:
 
 jobs:
   repair:
-    name: 修复壁纸描述
+    name: 按图片 ID 修复描述与版权
     runs-on: ubuntu-latest
-
+    timeout-minutes: 30
     env:
       TZ: Asia/Shanghai
       YEAR: ${{ inputs.year }}
       START_DATE: ${{ inputs.start_date }}
       END_DATE: ${{ inputs.end_date }}
       LIMIT: ${{ inputs.limit }}
-      FORCE: ${{ inputs.force }}
+      DRY_RUN: ${{ inputs.dry_run }}
 
     steps:
       - name: 检出 bing-data 仓库
@@ -62,54 +60,74 @@ jobs:
         with:
           node-version: 22
 
-
       - name: 检查输入参数
         shell: bash
         run: |
           set -euo pipefail
-
           if [[ "$YEAR" != "all" && ! "$YEAR" =~ ^[0-9]{4}$ ]]; then
             echo "::error::年份必须填写 all 或四位数字"
             exit 1
           fi
-
           if [[ "$LIMIT" != "0" && ! "$LIMIT" =~ ^[0-9]+$ ]]; then
-            echo "::error::处理条数必须是非负整数"
+            echo "::error::LIMIT 必须是非负整数"
             exit 1
           fi
 
-          if [[ -n "$START_DATE" && ! "$START_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-            echo "::error::开始日期格式必须为 YYYY-MM-DD"
-            exit 1
-          fi
+          validate_date() {
+            local value="$1"
+            local name="$2"
+            [[ -z "$value" ]] && return 0
+            if [[ ! "$value" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "::error::$name 格式必须为 YYYY-MM-DD"
+              exit 1
+            fi
+            local parsed
+            parsed="$(date -u -d "$value" +%F 2>/dev/null)" || {
+              echo "::error::$name 不是有效日期：$value"
+              exit 1
+            }
+            if [[ "$parsed" != "$value" ]]; then
+              echo "::error::$name 不是有效日期：$value"
+              exit 1
+            fi
+          }
 
-          if [[ -n "$END_DATE" && ! "$END_DATE" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
-            echo "::error::结束日期格式必须为 YYYY-MM-DD"
-            exit 1
-          fi
+          validate_date "$START_DATE" "START_DATE"
+          validate_date "$END_DATE" "END_DATE"
 
           if [[ -n "$START_DATE" && -n "$END_DATE" && "$START_DATE" > "$END_DATE" ]]; then
-            echo "::error::开始日期不能晚于结束日期"
+            echo "::error::START_DATE 不能晚于 END_DATE"
             exit 1
           fi
+          if [[ "$YEAR" != "all" ]]; then
+            if [[ -n "$START_DATE" && "${START_DATE:0:4}" != "$YEAR" ]]; then
+              echo "::error::START_DATE 与 YEAR 不一致"
+              exit 1
+            fi
+            if [[ -n "$END_DATE" && "${END_DATE:0:4}" != "$YEAR" ]]; then
+              echo "::error::END_DATE 与 YEAR 不一致"
+              exit 1
+            fi
+          fi
 
-      - name: 获取并修复壁纸描述
+      - name: 检查脚本语法
+        run: node --check scripts/repair-descriptions.js
+
+      - name: 检查或修复描述与版权
         run: node scripts/repair-descriptions.js
 
       - name: 提交数据变更
-        if: always()
+        if: success() && inputs.dry_run == false
+        shell: bash
         run: |
-          set -e
-
+          set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-
-          git add data/
-
+          git add -- data/
           if git diff --cached --quiet; then
             echo "没有需要提交的数据变更。"
             exit 0
           fi
-
-          git commit -m "修复必应壁纸描述"
-          git push origin HEAD:${GITHUB_REF_NAME}
+          git diff --cached --stat
+          git commit -m "fix: repair wallpaper descriptions and copyrights by image ID"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
