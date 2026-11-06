@@ -685,6 +685,54 @@ function loadMonthData(
   }
 }
 
+function isIndexEntryCurrent(date, item) {
+  const indexFile = path.join(
+    'data',
+    'index.json'
+  )
+
+  if (!fs.existsSync(indexFile)) {
+    return false
+  }
+
+  try {
+    const index = JSON.parse(
+      fs.readFileSync(indexFile, 'utf8')
+    )
+
+    if (!Array.isArray(index.items)) {
+      return false
+    }
+
+    const indexedItem = index.items.find(
+      entry =>
+        Array.isArray(entry) &&
+        entry[0] === date
+    )
+
+    if (!indexedItem) {
+      return false
+    }
+
+    const cleanText = value =>
+      String(value || '')
+        .replace(/\s+/g, ' ')
+        .trim()
+
+    return (
+      indexedItem[1] === cleanText(item.title) &&
+      indexedItem[2] === cleanText(item.description)
+    )
+  } catch (error) {
+    log(
+      `History index is invalid: ${error.message}`
+    )
+
+    return false
+  }
+}
+
+
 /**
  * 提取壁纸记录中需要参与比较的字段。
  *
@@ -1382,19 +1430,18 @@ async function main() {
       existing,
       item
     )
-  
   if (unchanged) {
-    log(
-      `No data changes detected: ${date}`
-    )
-  
-    log(
-      'Skipping monthly JSON update.'
-    )
-  
-    log(
-      'Skipping history index rebuild.'
-    )
+    log(`No data changes detected: ${date}`)
+    log('Skipping monthly JSON update.')
+
+    if (isIndexEntryCurrent(date, item)) {
+      log('History index is up to date.')
+      log('Skipping history index rebuild.')
+    } else {
+      log('History index is missing or outdated.')
+      buildIndex()
+      log('Index rebuilt.')
+    }
   } else {
     /*
      * 9.1 写入或更新壁纸记录。
