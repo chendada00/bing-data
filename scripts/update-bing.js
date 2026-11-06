@@ -2,6 +2,9 @@ const fs = require('fs')
 const path = require('path')
 const https = require('https')
 const http = require('http')
+const {
+  isDeepStrictEqual
+} = require('node:util')
 
 const Jimp = require('jimp')
 const Vibrant = require('node-vibrant')
@@ -683,6 +686,73 @@ function loadMonthData(
 }
 
 /**
+ * 提取壁纸记录中需要参与比较的字段。
+ *
+ * 不比较文件级别的 updatedAt。
+ * 只比较实际壁纸数据。
+ */
+function getComparableItem(item) {
+  if (!item) {
+    return null
+  }
+
+  return {
+    date: item.date,
+
+    title: item.title,
+    description: item.description,
+
+    copyright: item.copyright,
+    copyrightLink: item.copyrightLink,
+
+    image: item.image,
+    preview: item.preview,
+    sourceImage: item.sourceImage,
+
+    base64: item.base64,
+
+    color: item.color,
+    colorHistogram: item.colorHistogram,
+
+    width: item.width,
+    height: item.height,
+
+    id: item.id,
+
+    startDate: item.startDate,
+    fullStartDate: item.fullStartDate,
+    endDate: item.endDate
+  }
+}
+
+/**
+ * 判断两条壁纸记录是否完全一致。
+ *
+ * 使用 Node.js 深度比较：
+ * - 普通字段
+ * - 嵌套对象
+ * - 数组
+ * - 颜色数据
+ * - Base64
+ *
+ * 都会参与比较。
+ */
+function isItemUnchanged(
+  existing,
+  current
+) {
+  if (!existing || !current) {
+    return false
+  }
+
+  return isDeepStrictEqual(
+    getComparableItem(existing),
+    getComparableItem(current)
+  )
+}
+
+
+/**
  * 从 Bing API 获取当天数据。
  */
 async function fetchBingMetadata() {
@@ -1241,7 +1311,9 @@ async function main() {
       '',
 
     description:
-      officialDescription,
+      officialDescription ||
+      existing?.description ||
+      '',
 
     copyright:
       bing.copyright ||
@@ -1296,73 +1368,110 @@ async function main() {
       existing?.endDate ||
       null
   }
-
+  
   /*
-   * 9. 写回当月 JSON。
+   * 9. 判断数据是否发生变化。
+   *
+   * 如果当天记录已经存在，
+   * 并且新旧记录完全一致，
+   * 则跳过 JSON 写入。
    */
-  if (
-    existingIndex >= 0
-  ) {
-    monthData.items[
-      existingIndex
-    ] = item
-
-    log(
-      `Updated existing data record: ${date}`
-    )
-  } else {
-    monthData.items.push(
+  const unchanged =
+    existingIndex >= 0 &&
+    isItemUnchanged(
+      existing,
       item
     )
-
+  
+  if (unchanged) {
     log(
-      `Created new data record: ${date}`
+      `No data changes detected: ${date}`
+    )
+  
+    log(
+      'Skipping monthly JSON update.'
+    )
+  
+    log(
+      'Skipping history index rebuild.'
+    )
+  } else {
+    /*
+     * 9.1 写入或更新壁纸记录。
+     */
+    if (
+      existingIndex >= 0
+    ) {
+      monthData.items[
+        existingIndex
+      ] = item
+  
+      log(
+        `Updated existing data record: ${date}`
+      )
+    } else {
+      monthData.items.push(
+        item
+      )
+  
+      log(
+        `Created new data record: ${date}`
+      )
+    }
+  
+    /*
+     * 9.2 按日期排序。
+     */
+    monthData.items.sort(
+      (a, b) =>
+        String(a.date)
+          .localeCompare(
+            String(b.date)
+          )
+    )
+  
+    /*
+     * 9.3 只有发生数据变化，
+     * 才更新月度 JSON 的更新时间。
+     */
+    monthData.updatedAt =
+      new Date().toISOString()
+  
+    /*
+     * 9.4 写入月度 JSON。
+     */
+    fs.mkdirSync(
+      path.dirname(jsonFile),
+      {
+        recursive: true
+      }
+    )
+  
+    fs.writeFileSync(
+      jsonFile,
+      JSON.stringify(
+        monthData,
+        null,
+        2
+      ) + '\n',
+      'utf8'
+    )
+  
+    log(
+      `Data written: ${jsonFile}`
+    )
+  
+    /*
+     * 9.5 只有发生数据变化，
+     * 才重建历史索引。
+     */
+    buildIndex()
+  
+    log(
+      'Index rebuilt.'
     )
   }
-
-  monthData.items.sort(
-    (a, b) =>
-      String(a.date)
-        .localeCompare(
-          String(b.date)
-        )
-  )
-
-  monthData.updatedAt =
-    new Date().toISOString()
-
-  fs.mkdirSync(
-    path.dirname(
-      jsonFile
-    ),
-    {
-      recursive: true
-    }
-  )
-
-  fs.writeFileSync(
-    jsonFile,
-    JSON.stringify(
-      monthData,
-      null,
-      2
-    ) + '\n',
-    'utf8'
-  )
-
-  log(
-    `Data written: ${jsonFile}`
-  )
-
-  /*
-   * 10. 重建 index。
-   */
-  buildIndex()
-
-  log(
-    'Index rebuilt.'
-  )
-
+  
   log(
     '========== Bing wallpaper update completed =========='
   )
