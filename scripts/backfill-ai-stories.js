@@ -24,7 +24,8 @@ const DEFAULT_BASE_URL = 'https://tokenhub.tencentmaas.com/v1'
 // 该项目需要把图片传给模型，因此默认选择文档标注的视觉模型。
 const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash-vision-exp'
 const MAX_CONSECUTIVE_FAILURES = 5
-const MAX_IMAGE_BYTES = 25 * 1024 * 1024
+// bing-data 预览图生成逻辑的目标上限约为 800KB；留出少量余量。
+const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 function log(message) {
   console.log(`[${new Date().toISOString()}] ${message}`)
@@ -77,7 +78,7 @@ function getConfig() {
     apiKey,
     baseURL: String(process.env.TENCENT_MAAS_BASE_URL || DEFAULT_BASE_URL).trim().replace(/\/+$/, ''),
     model: String(process.env.TENCENT_MAAS_MODEL || DEFAULT_MODEL).trim(),
-    uhdRoot: path.resolve(process.env.UHD_ROOT || 'bing-uhd')
+    previewRoot: path.resolve(process.env.PREVIEW_ROOT || 'preview')
   }
 }
 
@@ -148,10 +149,10 @@ function hasExistingStory(item) {
   )
 }
 
-function getLocalUhdPath(config, date) {
+function getLocalPreviewPath(config, date) {
   const year = date.slice(0, 4)
   const month = date.slice(5, 7)
-  return path.join(config.uhdRoot, 'images', year, month, `${date}.jpg`)
+  return path.join(config.previewRoot, year, month, `${date}.jpg`)
 }
 
 async function validateImageBuffer(buffer, source) {
@@ -206,32 +207,26 @@ async function downloadImage(url) {
 }
 
 async function loadWallpaperImage(config, item, date) {
-  const localPath = getLocalUhdPath(config, date)
+  // 只使用 bing-data 自己生成的 preview，不读取或下载 UHD。
+  const localPath = getLocalPreviewPath(config, date)
   if (fs.existsSync(localPath)) {
     try {
       const buffer = fs.readFileSync(localPath)
       await validateImageBuffer(buffer, localPath)
-      log(`使用本地 UHD 图片：${path.relative(ROOT, localPath)}`)
+      log(`使用本地预览图：${path.relative(ROOT, localPath)}`)
       return buffer
     } catch (error) {
-      log(`本地 UHD 图片不可用，尝试远程地址：${error.message}`)
+      log(`本地预览图不可用，尝试 JSON 中的 preview 地址：${error.message}`)
     }
   }
 
-  // 先尝试 Bing 官方 UHD，再尝试项目自己的 UHD CDN。
-  const urls = [...new Set([item.sourceImage, item.image].filter(Boolean))]
-  const errors = []
-  for (const url of urls) {
-    try {
-      log(`下载历史壁纸：${date} <- ${url}`)
-      return await downloadImage(url)
-    } catch (error) {
-      errors.push(error.message)
-      log(`图片地址不可用，继续尝试备用地址：${error.message}`)
-    }
+  // 严格只允许 item.preview，绝不回退到 sourceImage / image（它们可能是 UHD）。
+  if (!item.preview) {
+    throw new Error(`记录 ${date} 没有 preview 地址，且本地预览图不存在：${path.relative(ROOT, localPath)}`)
   }
 
-  throw new Error(`无法取得 ${date} 的图片。${errors.join(' | ') || '记录中没有 sourceImage/image 地址'}`)
+  log(`下载预览图：${date} <- ${item.preview}`)
+  return downloadImage(item.preview)
 }
 
 function writeMonthData(file, monthData) {
@@ -357,7 +352,7 @@ if (require.main === module) {
 module.exports = {
   hasExistingStory,
   validateDate,
-  getLocalUhdPath,
+  getLocalPreviewPath,
   readRecords,
   writeMonthData
 }
