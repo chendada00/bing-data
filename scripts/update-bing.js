@@ -47,6 +47,13 @@ const MIN_UHD_HEIGHT = 1600
 const BING_API_URL =
   'https://cn.bing.com/HPImageArchive.aspx?format=js&idx=0&n=1&mkt=zh-CN'
 
+
+const {
+  AI_STORY_PROMPT_VERSION,
+  generateWallpaperStory
+} = require('./ai-story')
+
+
 function log(message) {
   console.log(
     `[${new Date().toISOString()}] ${message}`
@@ -762,6 +769,8 @@ function getComparableItem(item) {
     color: item.color,
     colorHistogram: item.colorHistogram,
 
+    aiStory: item.aiStory || null,
+
     width: item.width,
     height: item.height,
 
@@ -1335,6 +1344,44 @@ async function main() {
     )
   }
 
+
+  // AI 故事只在缺失或 Prompt 版本变化时生成。
+  // 已有故事直接复用，避免每天重复消耗 API 额度。
+  let aiStory = existing?.aiStory || null
+
+  const shouldGenerateAiStory = (
+    !existing?.aiStory ||
+    existing.aiStory.promptVersion !== AI_STORY_PROMPT_VERSION
+  )
+
+  if (shouldGenerateAiStory && process.env.AI_API_KEY) {
+    try {
+      log(`开始生成 AI 壁纸故事：${date}`)
+
+      aiStory = await generateWallpaperStory({
+        imageBuffer: uhd.buffer,
+        date,
+        bing: {
+          title: bing.title || '',
+          description: officialDescription || existing?.description || '',
+          copyright: bing.copyright || ''
+        }
+      })
+
+      log(`AI 壁纸故事生成成功：${aiStory.title}`)
+    } catch (error) {
+      // AI 失败不能阻断每日壁纸采集、颜色分析和数据保存。
+      log(`AI 壁纸故事生成失败，将保留旧故事或跳过：${error.message}`)
+      aiStory = existing?.aiStory || null
+    }
+  } else if (!process.env.AI_API_KEY) {
+    log('AI_API_KEY 未配置，跳过 AI 故事生成。')
+  } else {
+    log(`AI 故事已存在且 Prompt 版本未变化：${date}`)
+  }
+
+  
+
   /*
    * 8. 使用 Bing 官方 metadata。
    *
@@ -1367,6 +1414,7 @@ async function main() {
       bing.copyright ||
       existing?.copyright ||
       '',
+    ...(aiStory ? { aiStory } : {}),
 
     copyrightLink:
       bing.copyrightlink ||
