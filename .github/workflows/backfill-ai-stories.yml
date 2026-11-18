@@ -49,7 +49,7 @@ jobs:
       # 与每日 update-bing.yml 完全复用同一组 AI Secrets / Variables。
       AI_API_KEY: ${{ secrets.AI_API_KEY }}
       AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://api.chatanywhere.org/v1' }}
-      AI_MODEL: ${{ vars.AI_MODEL || 'gpt-4o' }}
+      AI_MODEL: ${{ vars.AI_MODEL }}
 
     steps:
       - name: 检出 bing-data 仓库
