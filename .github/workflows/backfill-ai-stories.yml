@@ -1,0 +1,135 @@
+name: Backfill Historical AI Stories
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_date:
+        description: '开始日期 YYYY-MM-DD；留空表示不限制'
+        required: false
+        default: ''
+        type: string
+      end_date:
+        description: '结束日期 YYYY-MM-DD；留空表示不限制'
+        required: false
+        default: ''
+        type: string
+      force:
+        description: '强制重新生成已有 AI 解读（会覆盖旧解读）'
+        required: true
+        default: false
+        type: boolean
+      max_items:
+        description: '本次最多成功补充条数（1-30）'
+        required: true
+        default: '30'
+        type: string
+
+permissions:
+  contents: write
+
+concurrency:
+  group: bing-ai-story-backfill
+  cancel-in-progress: false
+
+jobs:
+  backfill:
+    name: 补充历史壁纸 AI 解读
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    env:
+      TZ: Asia/Shanghai
+      START_DATE: ${{ inputs.start_date }}
+      END_DATE: ${{ inputs.end_date }}
+      FORCE: ${{ inputs.force }}
+      MAX_ITEMS: ${{ inputs.max_items }}
+      TENCENT_MAAS_API_KEY: ${{ secrets.TENCENT_MAAS_API_KEY }}
+      TENCENT_MAAS_BASE_URL: ${{ vars.TENCENT_MAAS_BASE_URL || 'https://tokenhub.tencentmaas.com/v1' }}
+      TENCENT_MAAS_MODEL: ${{ vars.TENCENT_MAAS_MODEL || 'deepseek/deepseek-v4-flash-vision-exp' }}
+
+    steps:
+      - name: 检出 bing-data 仓库
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: 配置 Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: 校验输入与腾讯云配置
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          if [[ -z "${TENCENT_MAAS_API_KEY:-}" ]]; then
+            echo "::error::请先在仓库 Secrets 中配置 TENCENT_MAAS_API_KEY"
+            exit 1
+          fi
+
+          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 30 )); then
+            echo "::error::max_items 必须是 1 到 30 之间的整数"
+            exit 1
+          fi
+
+          validate_date() {
+            local value="$1"
+            local name="$2"
+            [[ -z "$value" ]] && return 0
+            if [[ ! "$value" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
+              echo "::error::$name 必须使用 YYYY-MM-DD 格式"
+              exit 1
+            fi
+            local parsed
+            parsed="$(date -u -d "$value" +%F 2>/dev/null)" || {
+              echo "::error::$name 不是有效日期：$value"
+              exit 1
+            }
+            if [[ "$parsed" != "$value" ]]; then
+              echo "::error::$name 不是有效日期：$value"
+              exit 1
+            fi
+          }
+
+          validate_date "$START_DATE" "start_date"
+          validate_date "$END_DATE" "end_date"
+
+          if [[ -n "$START_DATE" && -n "$END_DATE" && "$START_DATE" > "$END_DATE" ]]; then
+            echo "::error::start_date 不能晚于 end_date"
+            exit 1
+          fi
+
+          echo "输入校验通过。"
+          echo "日期范围：${START_DATE:-不限} 至 ${END_DATE:-不限}"
+          echo "强制重生成：${FORCE:-false}"
+          echo "最多成功补充：$MAX_ITEMS 条"
+          echo "模型：${TENCENT_MAAS_MODEL}"
+
+      - name: 安装依赖
+        run: |
+          npm init -y
+          npm install --no-save jimp@0.16.1 openai
+
+      - name: 检查脚本语法
+        run: node --check scripts/backfill-ai-stories.js
+
+      - name: 补充历史 AI 解读
+        run: node scripts/backfill-ai-stories.js
+
+      - name: 提交历史 AI 解读数据
+        if: success()
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          git add -- data/
+          if git diff --cached --quiet; then
+            echo "没有新增 AI 解读数据，无需提交。"
+            exit 0
+          fi
+
+          git diff --cached --stat
+          git commit -m "chore: backfill historical AI wallpaper stories"
+          git push origin "HEAD:${GITHUB_REF_NAME}"
