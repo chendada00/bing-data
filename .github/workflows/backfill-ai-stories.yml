@@ -44,7 +44,7 @@ jobs:
       MAX_ITEMS: ${{ inputs.max_items }}
       TENCENT_MAAS_API_KEY: ${{ secrets.TENCENT_MAAS_API_KEY }}
       TENCENT_MAAS_BASE_URL: ${{ vars.TENCENT_MAAS_BASE_URL || 'https://tokenhub.tencentmaas.com/v1' }}
-      TENCENT_MAAS_MODEL: ${{ vars.TENCENT_MAAS_MODEL || 'deepseek/deepseek-v4-flash-vision-exp' }}
+      TENCENT_MAAS_MODEL: ${{ vars.TENCENT_MAAS_MODEL || 'deepseek-v4.1-flash' }}
 
     steps:
       - name: 检出 bing-data 仓库
