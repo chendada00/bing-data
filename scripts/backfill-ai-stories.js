@@ -22,7 +22,7 @@ const DATA_ROOT = path.join(ROOT, 'data')
 const DEFAULT_BASE_URL = 'https://tokenhub.tencentmaas.com/v1'
 // DeepSeek V4.1 Flash 在 TokenHub 模型列表中属于通用对话模型；
 // 该项目需要把图片传给模型，因此默认选择文档标注的视觉模型。
-const DEFAULT_MODEL = 'deepseek/deepseek-v4-flash-vision-exp'
+const DEFAULT_MODEL = 'deepseek-v4.1-flash'
 const MAX_CONSECUTIVE_FAILURES = 5
 // bing-data 预览图生成逻辑的目标上限约为 800KB；留出少量余量。
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
