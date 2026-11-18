@@ -2,16 +2,14 @@
 'use strict'
 
 /**
- * 为 bing-data 历史壁纸补充 AI 解读。
+ * 历史壁纸 AI 解读回填
  *
- * 规则：
- * - 扫描 data/YYYY/MM.json 中所有壁纸记录；
- * - 日期倒序处理，开始/结束日期均包含；
- * - 默认跳过已有非空 aiStory.story 的记录；
- * - FORCE=true 时覆盖已有解读；
- * - 最多成功补充 MAX_ITEMS 条，最大值硬限制为 30；
- * - 每成功一条立即写回对应月度 JSON，便于中断后续跑；
- * - 使用独立的 TENCENT_MAAS_* 环境变量，不修改每日任务的接口配置。
+ * - 直接复用每日 update-bing.yml 的 AI_API_KEY / AI_BASE_URL / AI_MODEL
+ * - 不创建第二套 AI 接口，不切换服务商
+ * - 日期倒序，只处理没有有效 aiStory.story 的记录
+ * - 默认最多成功补充 5 条，硬上限也是 5 条
+ * - 每成功一条立即写回月度 JSON
+ * - 只读取本地 preview 或 item.preview，绝不下载 UHD
  */
 
 const fs = require('fs')
@@ -19,12 +17,9 @@ const path = require('path')
 
 const ROOT = process.cwd()
 const DATA_ROOT = path.join(ROOT, 'data')
-const DEFAULT_BASE_URL = 'https://tokenhub.tencentmaas.com/v1'
-// DeepSeek V4.1 Flash 在 TokenHub 模型列表中属于通用对话模型；
-// 该项目需要把图片传给模型，因此默认选择文档标注的视觉模型。
-const DEFAULT_MODEL = 'deepseek-v4.1-flash'
+const DEFAULT_MAX_ITEMS = 5
+const MAX_ITEMS_LIMIT = 5
 const MAX_CONSECUTIVE_FAILURES = 5
-// bing-data 预览图生成逻辑的目标上限约为 800KB；留出少量余量。
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
 function log(message) {
@@ -56,28 +51,30 @@ function getConfig() {
     throw new Error('START_DATE 不能晚于 END_DATE')
   }
 
-  const maxItemsRaw = process.env.MAX_ITEMS || '30'
-  if (!/^\d+$/.test(maxItemsRaw)) {
-    throw new Error('MAX_ITEMS 必须是 1 到 30 之间的整数')
-  }
-  const maxItems = Number(maxItemsRaw)
-  if (maxItems < 1 || maxItems > 30) {
-    throw new Error('MAX_ITEMS 必须是 1 到 30 之间的整数')
+  // 留空时默认 5；即使手动传入更大的数字，也硬限制为 5。
+  const rawMaxItems = process.env.MAX_ITEMS == null || process.env.MAX_ITEMS === ''
+    ? String(DEFAULT_MAX_ITEMS)
+    : String(process.env.MAX_ITEMS).trim()
+
+  if (!/^\d+$/.test(rawMaxItems)) {
+    throw new Error('MAX_ITEMS 必须是 1 到 5 之间的整数')
   }
 
-  const apiKey = String(process.env.TENCENT_MAAS_API_KEY || '').trim()
+  const requestedMaxItems = Number(rawMaxItems)
+  if (requestedMaxItems < 1) {
+    throw new Error('MAX_ITEMS 必须是 1 到 5 之间的整数')
+  }
+
+  const apiKey = String(process.env.AI_API_KEY || '').trim()
   if (!apiKey) {
-    throw new Error('缺少 TENCENT_MAAS_API_KEY，请在 GitHub Actions Secrets 中配置')
+    throw new Error('缺少 AI_API_KEY；请复用每日 update-bing workflow 使用的 Secret')
   }
 
   return {
     startDate,
     endDate,
     force: parseBoolean(process.env.FORCE, false),
-    maxItems,
-    apiKey,
-    baseURL: String(process.env.TENCENT_MAAS_BASE_URL || DEFAULT_BASE_URL).trim().replace(/\/+$/, ''),
-    model: String(process.env.TENCENT_MAAS_MODEL || DEFAULT_MODEL).trim(),
+    maxItems: Math.min(requestedMaxItems, MAX_ITEMS_LIMIT),
     previewRoot: path.resolve(process.env.PREVIEW_ROOT || 'preview')
   }
 }
@@ -130,11 +127,11 @@ function readRecords(config) {
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
       if (config.startDate && date < config.startDate) continue
       if (config.endDate && date > config.endDate) continue
-
       records.push({ file, monthData, item, date })
     }
   }
 
+  // 日期倒序：先补最新的缺失记录。
   records.sort((a, b) => b.date.localeCompare(a.date))
   return { records, fileCount: files.length }
 }
@@ -160,7 +157,7 @@ async function validateImageBuffer(buffer, source) {
     throw new Error(`图片内容为空或过小：${source}`)
   }
   if (buffer.length > MAX_IMAGE_BYTES) {
-    throw new Error(`图片超过 25MB 限制：${source}`)
+    throw new Error(`图片超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 限制：${source}`)
   }
 
   const Jimp = require('jimp')
@@ -173,6 +170,7 @@ async function validateImageBuffer(buffer, source) {
 
 async function downloadImage(url) {
   if (!url) throw new Error('图片 URL 为空')
+
   let parsed
   try {
     parsed = new URL(url)
@@ -199,7 +197,7 @@ async function downloadImage(url) {
 
   const contentLength = Number(response.headers.get('content-length') || 0)
   if (contentLength > MAX_IMAGE_BYTES) {
-    throw new Error(`图片超过 25MB 限制：${url}`)
+    throw new Error(`图片超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 限制：${url}`)
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
@@ -207,7 +205,7 @@ async function downloadImage(url) {
 }
 
 async function loadWallpaperImage(config, item, date) {
-  // 只使用 bing-data 自己生成的 preview，不读取或下载 UHD。
+  // 优先读取仓库中的 preview 文件。
   const localPath = getLocalPreviewPath(config, date)
   if (fs.existsSync(localPath)) {
     try {
@@ -220,7 +218,7 @@ async function loadWallpaperImage(config, item, date) {
     }
   }
 
-  // 严格只允许 item.preview，绝不回退到 sourceImage / image（它们可能是 UHD）。
+  // 严格只使用 item.preview，绝不回退到 sourceImage / image（可能是 UHD）。
   if (!item.preview) {
     throw new Error(`记录 ${date} 没有 preview 地址，且本地预览图不存在：${path.relative(ROOT, localPath)}`)
   }
@@ -245,23 +243,19 @@ function sleep(ms) {
 async function main() {
   const config = getConfig()
 
-  // 复用现有 ai-story.js 的 Prompt、图像缩放、JSON 校验和数据结构。
-  // 本脚本独立运行，因此只在当前进程内把腾讯云独立配置映射到该模块读取的 AI_* 变量，
-  // 不会改变每日 update-bing.yml 的 Secrets/Variables，也不会影响每日生成接口。
-  process.env.AI_API_KEY = config.apiKey
-  process.env.AI_BASE_URL = config.baseURL
-  process.env.AI_MODEL = config.model
-
+  // 不在这里覆盖 AI_* 环境变量。它们由 workflow 直接从每日更新任务的
+  // 同一组 Secrets / Variables 注入，ai-story.js 会原样读取。
   const { generateWallpaperStory } = require('./ai-story')
   const { records, fileCount } = readRecords(config)
 
   log('========== 历史 AI 解读补充开始 ==========')
   log(`扫描月度 JSON：${fileCount} 个`)
   log(`日期范围：${config.startDate || '最早'} 至 ${config.endDate || '最新'}`)
-  log(`处理顺序：日期倒序`)
+  log('处理顺序：日期倒序')
   log(`强制重新生成：${config.force ? '是' : '否'}`)
-  log(`最多成功补充：${config.maxItems} 条`)
-  log(`腾讯云模型：${config.model}`)
+  log(`最多成功补充：${config.maxItems} 条（硬上限 ${MAX_ITEMS_LIMIT}）`)
+  log(`AI_BASE_URL：${process.env.AI_BASE_URL || '使用 ai-story.js 默认值'}`)
+  log(`AI_MODEL：${process.env.AI_MODEL || '使用 ai-story.js 默认值'}`)
   log(`候选记录：${records.length} 条`)
 
   let successCount = 0
@@ -319,8 +313,6 @@ async function main() {
       consecutiveFailures += 1
       log(`补充失败：${date}；原因：${error.message}`)
 
-      // 如果连续失败，通常意味着模型不支持视觉输入、Key/额度错误或接口配置错误；
-      // 继续请求只会扩大成本，因此连续失败 5 次后停止。
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
         log(`连续失败达到 ${MAX_CONSECUTIVE_FAILURES} 次，疑似接口级问题，停止任务。`)
         break
@@ -334,7 +326,7 @@ async function main() {
   log(`成功补充：${successCount}`)
   log(`跳过已有：${skippedCount}`)
   log(`失败记录：${failedCount}`)
-  log(`实际请求次数：${attemptedCount}`)
+  log(`实际调用尝试次数：${attemptedCount}`)
   log(`剩余候选（未继续处理）：${Math.max(0, records.length - processedCount)}`)
 
   if (successCount === 0 && failedCount > 0) {

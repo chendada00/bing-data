@@ -1,6 +1,9 @@
 name: Backfill Historical AI Stories
 
 on:
+  # 每天北京时间 02:00 自动补充；GitHub Actions cron 使用 UTC。
+  schedule:
+    - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       start_date:
@@ -15,13 +18,13 @@ on:
         type: string
       force:
         description: '强制重新生成已有 AI 解读（会覆盖旧解读）'
-        required: true
+        required: false
         default: false
         type: boolean
       max_items:
-        description: '本次最多成功补充条数（1-30）'
-        required: true
-        default: '30'
+        description: '本次最多成功补充条数（1-5）；留空默认 5'
+        required: false
+        default: '5'
         type: string
 
 permissions:
@@ -35,16 +38,18 @@ jobs:
   backfill:
     name: 补充历史壁纸 AI 解读
     runs-on: ubuntu-latest
-    timeout-minutes: 180
+    timeout-minutes: 60
     env:
       TZ: Asia/Shanghai
-      START_DATE: ${{ inputs.start_date }}
-      END_DATE: ${{ inputs.end_date }}
-      FORCE: ${{ inputs.force }}
-      MAX_ITEMS: ${{ inputs.max_items }}
-      TENCENT_MAAS_API_KEY: ${{ secrets.TENCENT_MAAS_API_KEY }}
-      TENCENT_MAAS_BASE_URL: ${{ vars.TENCENT_MAAS_BASE_URL || 'https://tokenhub.tencentmaas.com/v1' }}
-      TENCENT_MAAS_MODEL: ${{ vars.TENCENT_MAAS_MODEL || 'deepseek-v4.1-flash' }}
+      START_DATE: ${{ github.event.inputs.start_date || '' }}
+      END_DATE: ${{ github.event.inputs.end_date || '' }}
+      FORCE: ${{ github.event.inputs.force || 'false' }}
+      MAX_ITEMS: ${{ github.event.inputs.max_items || '5' }}
+
+      # 与每日 update-bing.yml 完全复用同一组 AI Secrets / Variables。
+      AI_API_KEY: ${{ secrets.AI_API_KEY }}
+      AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://api.chatanywhere.org/v1' }}
+      AI_MODEL: ${{ vars.AI_MODEL || 'gpt-4o' }}
 
     steps:
       - name: 检出 bing-data 仓库
@@ -57,18 +62,18 @@ jobs:
         with:
           node-version: 22
 
-      - name: 校验输入与腾讯云配置
+      - name: 校验输入与 AI 配置
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ -z "${TENCENT_MAAS_API_KEY:-}" ]]; then
-            echo "::error::请先在仓库 Secrets 中配置 TENCENT_MAAS_API_KEY"
+          if [[ -z "${AI_API_KEY:-}" ]]; then
+            echo "::error::请在仓库 Secrets 中配置 AI_API_KEY（与每日更新壁纸任务使用同一个 Key）"
             exit 1
           fi
 
-          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 30 )); then
-            echo "::error::max_items 必须是 1 到 30 之间的整数"
+          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 5 )); then
+            echo "::error::MAX_ITEMS 必须是 1 到 5 之间的整数"
             exit 1
           fi
 
@@ -103,7 +108,8 @@ jobs:
           echo "日期范围：${START_DATE:-不限} 至 ${END_DATE:-不限}"
           echo "强制重生成：${FORCE:-false}"
           echo "最多成功补充：$MAX_ITEMS 条"
-          echo "模型：${TENCENT_MAAS_MODEL}"
+          echo "AI_BASE_URL：${AI_BASE_URL}"
+          echo "AI_MODEL：${AI_MODEL}"
 
       - name: 安装依赖
         run: |
@@ -111,7 +117,9 @@ jobs:
           npm install --no-save jimp@0.16.1 openai
 
       - name: 检查脚本语法
-        run: node --check scripts/backfill-ai-stories.js
+        run: |
+          node --check scripts/ai-story.js
+          node --check scripts/backfill-ai-stories.js
 
       - name: 补充历史 AI 解读
         run: node scripts/backfill-ai-stories.js
