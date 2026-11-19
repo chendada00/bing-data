@@ -2,8 +2,8 @@ name: Backfill Historical AI Stories
 
 on:
   # 每天北京时间 02:00 自动补充；GitHub Actions cron 使用 UTC。
-  schedule:
-    - cron: '0 18 * * *'
+  #schedule:
+  #  - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       start_date:
