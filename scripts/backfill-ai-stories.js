@@ -18,7 +18,7 @@ const path = require('path')
 const ROOT = process.cwd()
 const DATA_ROOT = path.join(ROOT, 'data')
 const DEFAULT_MAX_ITEMS = 5
-const MAX_ITEMS_LIMIT = 5
+const MAX_ITEMS_LIMIT = 10
 const MAX_CONSECUTIVE_FAILURES = 5
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
@@ -51,18 +51,18 @@ function getConfig() {
     throw new Error('START_DATE 不能晚于 END_DATE')
   }
 
-  // 留空时默认 5；即使手动传入更大的数字，也硬限制为 5。
+  // 留空时默认 10；即使手动传入更大的数字，也硬限制为 10。
   const rawMaxItems = process.env.MAX_ITEMS == null || process.env.MAX_ITEMS === ''
     ? String(DEFAULT_MAX_ITEMS)
     : String(process.env.MAX_ITEMS).trim()
 
   if (!/^\d+$/.test(rawMaxItems)) {
-    throw new Error('MAX_ITEMS 必须是 1 到 5 之间的整数')
+    throw new Error('MAX_ITEMS 必须是 1 到 10 之间的整数')
   }
 
   const requestedMaxItems = Number(rawMaxItems)
   if (requestedMaxItems < 1) {
-    throw new Error('MAX_ITEMS 必须是 1 到 5 之间的整数')
+    throw new Error('MAX_ITEMS 必须是 1 到 10 之间的整数')
   }
 
   const apiKey = String(process.env.AI_API_KEY || '').trim()
