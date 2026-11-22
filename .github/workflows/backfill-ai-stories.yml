@@ -22,7 +22,7 @@ on:
         default: false
         type: boolean
       max_items:
-        description: '本次最多成功补充条数（1-5）；留空默认 5'
+        description: '本次最多成功补充条数（1-10）；留空默认 5'
         required: false
         default: '5'
         type: string
@@ -72,8 +72,8 @@ jobs:
             exit 1
           fi
 
-          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 5 )); then
-            echo "::error::MAX_ITEMS 必须是 1 到 5 之间的整数"
+          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 10 )); then
+            echo "::error::MAX_ITEMS 必须是 1 到 10 之间的整数"
             exit 1
           fi
 
