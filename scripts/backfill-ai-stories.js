@@ -154,22 +154,26 @@ function resolveAIConfig() {
 
   const defaultName = String(config.default || '').trim()
 
-  if (!defaultName) {
-    throw new Error('AI_BACKFILL_CONFIG 缺少 default')
-  }
-
-  if (!names.has(defaultName)) {
-    throw new Error(`默认模型配置不存在：${defaultName}`)
-  }
-
+  // 手动指定模型时，优先使用手动选择。
+  // 只有未指定 MODEL_CONFIG 时才依赖 default。
   const selectedName = requestedName || defaultName
+
+  if (!selectedName) {
+    throw new Error(
+      '未指定 MODEL_CONFIG，且 AI_BACKFILL_CONFIG 缺少 default'
+    )
+  }
 
   const selected = config.models.find(
     item => String(item.name).trim() === selectedName
   )
 
   if (!selected) {
-    throw new Error(`找不到指定的模型配置：${selectedName}`)
+    if (requestedName) {
+      throw new Error(`找不到指定的模型配置：${selectedName}`)
+    }
+
+    throw new Error(`默认模型配置不存在：${selectedName}`)
   }
 
   return {
