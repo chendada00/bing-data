@@ -315,6 +315,63 @@ async function generateWallpaperStory({ imageBuffer, date, bing }) {
     const choice = completion?.choices?.[0]
     const content = extractMessageText(choice?.message)
 
+    // 仅当正文为空时，记录经过脱敏的响应结构。
+    // 不输出正文、API Key、图片 Base64 或完整请求。
+    if (!content) {
+      const message = choice?.message
+      const responseDiagnostic = {
+        responseType: typeof completion,
+        responseKeys:
+          completion && typeof completion === 'object'
+            ? Object.keys(completion)
+            : [],
+        model: completion?.model || null,
+        choicesType: Array.isArray(completion?.choices)
+          ? 'array'
+          : typeof completion?.choices,
+        choicesLength: Array.isArray(completion?.choices)
+          ? completion.choices.length
+          : null,
+        choiceKeys:
+          choice && typeof choice === 'object'
+            ? Object.keys(choice)
+            : [],
+        finishReason: choice?.finish_reason ?? null,
+        messageType: typeof message,
+        messageKeys:
+          message && typeof message === 'object'
+            ? Object.keys(message)
+            : [],
+        contentType: typeof message?.content,
+        contentIsArray: Array.isArray(message?.content),
+        contentLength:
+          typeof message?.content === 'string'
+            ? message.content.length
+            : Array.isArray(message?.content)
+              ? message.content.length
+              : null,
+        contentPartTypes: Array.isArray(message?.content)
+          ? message.content.map(part => ({
+              type: part?.type || typeof part,
+              hasText: typeof part?.text === 'string',
+              textLength:
+                typeof part?.text === 'string'
+                  ? part.text.length
+                  : null
+            }))
+          : [],
+        refusal: message?.refusal
+          ? String(message.refusal).slice(0, 200)
+          : null,
+        usage: completion?.usage || null
+      }
+
+      console.error(
+        '[AI响应诊断]',
+        JSON.stringify(responseDiagnostic, null, 2)
+      )
+    }
+
     try {
       if (!content) {
         const finishReason = choice?.finish_reason || 'unknown'
