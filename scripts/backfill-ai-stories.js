@@ -64,6 +64,11 @@ function validateDate(value, name) {
 /**
  * 解析模型配置。
  *
+ * 规则：
+ * 1. MODEL_CONFIG 为空：使用 bingupdate 原有环境变量。
+ * 2. MODEL_CONFIG 不为空：从 AI_BACKFILL_CONFIG 中读取指定配置。
+ * 3. 不再支持 JSON default。
+ *
  * 返回：
  * {
  *   configured: boolean,
@@ -72,20 +77,28 @@ function validateDate(value, name) {
  * }
  */
 function resolveAIConfig() {
-  const rawConfig = String(process.env.AI_BACKFILL_CONFIG || '').trim()
-  const requestedName = String(process.env.MODEL_CONFIG || '').trim()
+  const requestedName = String(
+    process.env.MODEL_CONFIG || ''
+  ).trim()
 
-  // JSON Secret 为空：保持原有逻辑。
-  if (!rawConfig) {
-    if (requestedName) {
-      log('AI_BACKFILL_CONFIG 未配置，忽略模型选择名称，使用原有 AI 配置。')
-    }
-
+  // 未手动选择模型：使用 bingupdate 原有配置。
+  // 不再解析 JSON，也不再读取 JSON.default。
+  if (!requestedName) {
     return {
       configured: false,
-      name: 'legacy',
+      name: 'bingupdate',
       model: null
     }
+  }
+
+  const rawConfig = String(
+    process.env.AI_BACKFILL_CONFIG || ''
+  ).trim()
+
+  if (!rawConfig) {
+    throw new Error(
+      '已指定 MODEL_CONFIG，但 AI_BACKFILL_CONFIG 未配置'
+    )
   }
 
   let config
@@ -93,92 +106,133 @@ function resolveAIConfig() {
   try {
     config = JSON.parse(rawConfig)
   } catch (error) {
-    throw new Error(`AI_BACKFILL_CONFIG JSON 解析失败：${error.message}`)
+    throw new Error(
+      `AI_BACKFILL_CONFIG JSON 解析失败：${error.message}`
+    )
   }
 
-  if (!config || typeof config !== 'object' || Array.isArray(config)) {
-    throw new Error('AI_BACKFILL_CONFIG 必须是 JSON 对象')
+  if (
+    !config ||
+    typeof config !== 'object' ||
+    Array.isArray(config)
+  ) {
+    throw new Error(
+      'AI_BACKFILL_CONFIG 必须是 JSON 对象'
+    )
   }
 
-  if (!Array.isArray(config.models) || config.models.length === 0) {
-    throw new Error('AI_BACKFILL_CONFIG.models 必须是非空数组')
+  if (
+    !Array.isArray(config.models) ||
+    config.models.length === 0
+  ) {
+    throw new Error(
+      'AI_BACKFILL_CONFIG.models 必须是非空数组'
+    )
   }
 
   const names = new Set()
 
   for (const item of config.models) {
-    if (!item || typeof item !== 'object' || Array.isArray(item)) {
-      throw new Error('models 中的每个配置必须是对象')
+    if (
+      !item ||
+      typeof item !== 'object' ||
+      Array.isArray(item)
+    ) {
+      throw new Error(
+        'models 中的每个配置必须是对象'
+      )
     }
 
-    const name = String(item.name || '').trim()
+    const name = String(
+      item.name || ''
+    ).trim()
 
     if (!name) {
-      throw new Error('模型配置缺少 name')
+      throw new Error(
+        '模型配置缺少 name'
+      )
     }
 
     if (names.has(name)) {
-      throw new Error(`模型配置名称重复：${name}`)
+      throw new Error(
+        `模型配置名称重复：${name}`
+      )
     }
 
     names.add(name)
-
-    if (item.useExisting === true) {
-      continue
-    }
-
-    if (typeof item.baseUrl !== 'string' || !item.baseUrl.trim()) {
-      throw new Error(`模型 ${name} 缺少 baseUrl`)
-    }
-
-    if (typeof item.apiKey !== 'string' || !item.apiKey.trim()) {
-      throw new Error(`模型 ${name} 缺少 apiKey`)
-    }
-
-    if (typeof item.model !== 'string' || !item.model.trim()) {
-      throw new Error(`模型 ${name} 缺少 model`)
-    }
-
-    let parsedUrl
-
-    try {
-      parsedUrl = new URL(item.baseUrl)
-    } catch {
-      throw new Error(`模型 ${name} 的 baseUrl 无效`)
-    }
-
-    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
-      throw new Error(`模型 ${name} 的 baseUrl 只允许 HTTP/HTTPS`)
-    }
-  }
-
-  const defaultName = String(config.default || '').trim()
-
-  // 手动指定模型时，优先使用手动选择。
-  // 只有未指定 MODEL_CONFIG 时才依赖 default。
-  const selectedName = requestedName || defaultName
-
-  if (!selectedName) {
-    throw new Error(
-      '未指定 MODEL_CONFIG，且 AI_BACKFILL_CONFIG 缺少 default'
-    )
   }
 
   const selected = config.models.find(
-    item => String(item.name).trim() === selectedName
+    item => String(item.name).trim() === requestedName
   )
 
   if (!selected) {
-    if (requestedName) {
-      throw new Error(`找不到指定的模型配置：${selectedName}`)
-    }
+    throw new Error(
+      `找不到指定的模型配置：${requestedName}`
+    )
+  }
 
-    throw new Error(`默认模型配置不存在：${selectedName}`)
+  // useExisting 模型不需要独立 API 配置。
+  if (selected.useExisting === true) {
+    return {
+      configured: true,
+      name: requestedName,
+      model: selected
+    }
+  }
+
+  if (
+    typeof selected.baseUrl !== 'string' ||
+    !selected.baseUrl.trim()
+  ) {
+    throw new Error(
+      `模型 ${requestedName} 缺少 baseUrl`
+    )
+  }
+
+  if (
+    typeof selected.apiKey !== 'string' ||
+    !selected.apiKey.trim()
+  ) {
+    throw new Error(
+      `模型 ${requestedName} 缺少 apiKey`
+    )
+  }
+
+  if (
+    typeof selected.model !== 'string' ||
+    !selected.model.trim()
+  ) {
+    throw new Error(
+      `模型 ${requestedName} 缺少 model`
+    )
+  }
+
+  let parsedUrl
+
+  try {
+    parsedUrl = new URL(
+      selected.baseUrl
+    )
+  } catch {
+    throw new Error(
+      `模型 ${requestedName} 的 baseUrl 无效`
+    )
+  }
+
+  if (
+    !['http:', 'https:'].includes(
+      parsedUrl.protocol
+    )
+  ) {
+    throw new Error(
+      `模型 ${requestedName} 的 baseUrl 只允许 HTTP/HTTPS`
+    )
   }
 
   return {
     configured: true,
-    name: selectedName,
+    name: requestedName,
     model: selected
   }
 }
@@ -186,17 +240,24 @@ function resolveAIConfig() {
 /**
  * 应用所选配置到 AI_* 环境变量。
  *
- * generateWallpaperStory() 每次调用时读取这些环境变量，
- * 因此不需要修改 ai-story.js。
+ * generateWallpaperStory() 每次调用时读取这些环境变量。
  */
 function applyAIConfig(resolved) {
   if (!resolved.configured) {
-    // 保持原有环境变量，不修改。
+    // MODEL_CONFIG 留空，使用 bingupdate 原有配置。
     if (!process.env.AI_API_KEY) {
       throw new Error(
-        '缺少 AI_API_KEY；请配置原有 Secret 或 AI_BACKFILL_CONFIG'
+        '缺少 AI_API_KEY；请配置 bingupdate 原有 Secret'
       )
     }
+
+    log('使用 bingupdate 原有 AI 配置')
+    log(
+      `AI_BASE_URL：${process.env.AI_BASE_URL || 'https://api.chatanywhere.org/v1'}`
+    )
+    log(
+      `AI_MODEL：${process.env.AI_MODEL || 'gpt-4o'}`
+    )
 
     return
   }
@@ -211,6 +272,13 @@ function applyAIConfig(resolved) {
     }
 
     log(`使用原有 AI 配置：${resolved.name}`)
+    log(
+      `AI_BASE_URL：${process.env.AI_BASE_URL || 'https://api.chatanywhere.org/v1'}`
+    )
+    log(
+      `AI_MODEL：${process.env.AI_MODEL || 'gpt-4o'}`
+    )
+
     return
   }
 

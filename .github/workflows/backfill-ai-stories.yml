@@ -29,7 +29,7 @@ on:
         type: string
 
       model_config:
-        description: 'AI 模型配置名称；留空使用 JSON 默认配置或旧逻辑'
+        description: 'AI 模型配置名称；留空使用 bingupdate 的原有模型配置'
         required: false
         default: ''
         type: string
@@ -121,7 +121,11 @@ jobs:
           echo "日期范围：${START_DATE:-不限} 至 ${END_DATE:-不限}"
           echo "强制重新生成：${FORCE:-false}"
           echo "最多成功补充：$MAX_ITEMS 条"
-          echo "模型配置选择：${MODEL_CONFIG:-默认}"
+          if [[ -z "$MODEL_CONFIG" ]]; then
+            echo "模型配置选择：使用 bingupdate 原有模型配置"
+          else
+            echo "模型配置选择：$MODEL_CONFIG"
+          fi
 
       - name: 安装依赖
         run: |
