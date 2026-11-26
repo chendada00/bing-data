@@ -1,9 +1,7 @@
+
 name: Backfill Historical AI Stories
 
 on:
-  # 每天北京时间 02:00 自动补充；GitHub Actions cron 使用 UTC。
-  #schedule:
-  #  - cron: '0 18 * * *'
   workflow_dispatch:
     inputs:
       start_date:
@@ -11,20 +9,29 @@ on:
         required: false
         default: ''
         type: string
+
       end_date:
         description: '结束日期 YYYY-MM-DD；留空表示不限制'
         required: false
         default: ''
         type: string
+
       force:
         description: '强制重新生成已有 AI 解读（会覆盖旧解读）'
         required: false
         default: false
         type: boolean
+
       max_items:
-        description: '本次最多成功补充条数（1-10）；留空默认 5'
+        description: '本次最多成功补充条数（1-30）；留空默认 5'
         required: false
         default: '5'
+        type: string
+
+      model_config:
+        description: 'AI 模型配置名称；留空使用 JSON 默认配置或旧逻辑'
+        required: false
+        default: ''
         type: string
 
 permissions:
@@ -39,14 +46,21 @@ jobs:
     name: 补充历史壁纸 AI 解读
     runs-on: ubuntu-latest
     timeout-minutes: 60
+
     env:
       TZ: Asia/Shanghai
+
       START_DATE: ${{ github.event.inputs.start_date || '' }}
       END_DATE: ${{ github.event.inputs.end_date || '' }}
       FORCE: ${{ github.event.inputs.force || 'false' }}
       MAX_ITEMS: ${{ github.event.inputs.max_items || '5' }}
+      MODEL_CONFIG: ${{ github.event.inputs.model_config || '' }}
 
-      # 与每日 update-bing.yml 完全复用同一组 AI Secrets / Variables。
+      # 新增的加密 JSON Secret。
+      # 留空时，脚本继续使用旧 AI 配置。
+      AI_BACKFILL_CONFIG: ${{ secrets.AI_BACKFILL_CONFIG }}
+
+      # 保持原有 AI 配置，供旧逻辑及 useExisting 使用。
       AI_API_KEY: ${{ secrets.AI_API_KEY }}
       AI_BASE_URL: ${{ vars.AI_BASE_URL || 'https://api.chatanywhere.org/v1' }}
       AI_MODEL: ${{ vars.AI_MODEL }}
@@ -62,34 +76,33 @@ jobs:
         with:
           node-version: 22
 
-      - name: 校验输入与 AI 配置
+      - name: 校验输入
         shell: bash
         run: |
           set -euo pipefail
 
-          if [[ -z "${AI_API_KEY:-}" ]]; then
-            echo "::error::请在仓库 Secrets 中配置 AI_API_KEY（与每日更新壁纸任务使用同一个 Key）"
-            exit 1
-          fi
-
-          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 10 )); then
-            echo "::error::MAX_ITEMS 必须是 1 到 10 之间的整数"
+          if [[ ! "$MAX_ITEMS" =~ ^[0-9]+$ ]] || (( MAX_ITEMS < 1 || MAX_ITEMS > 30 )); then
+            echo "::error::MAX_ITEMS 必须是 1 到 30 之间的整数"
             exit 1
           fi
 
           validate_date() {
             local value="$1"
             local name="$2"
+
             [[ -z "$value" ]] && return 0
+
             if [[ ! "$value" =~ ^[0-9]{4}-[0-9]{2}-[0-9]{2}$ ]]; then
               echo "::error::$name 必须使用 YYYY-MM-DD 格式"
               exit 1
             fi
+
             local parsed
             parsed="$(date -u -d "$value" +%F 2>/dev/null)" || {
               echo "::error::$name 不是有效日期：$value"
               exit 1
             }
+
             if [[ "$parsed" != "$value" ]]; then
               echo "::error::$name 不是有效日期：$value"
               exit 1
@@ -106,10 +119,9 @@ jobs:
 
           echo "输入校验通过。"
           echo "日期范围：${START_DATE:-不限} 至 ${END_DATE:-不限}"
-          echo "强制重生成：${FORCE:-false}"
+          echo "强制重新生成：${FORCE:-false}"
           echo "最多成功补充：$MAX_ITEMS 条"
-          echo "AI_BASE_URL：${AI_BASE_URL}"
-          echo "AI_MODEL：${AI_MODEL}"
+          echo "模型配置选择：${MODEL_CONFIG:-默认}"
 
       - name: 安装依赖
         run: |
@@ -129,10 +141,12 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
 
           git add -- data/
+
           if git diff --cached --quiet; then
             echo "没有新增 AI 解读数据，无需提交。"
             exit 0

@@ -1,15 +1,22 @@
+
 #!/usr/bin/env node
 'use strict'
 
 /**
  * 历史壁纸 AI 解读回填
  *
- * - 直接复用每日 update-bing.yml 的 AI_API_KEY / AI_BASE_URL / AI_MODEL
- * - 不创建第二套 AI 接口，不切换服务商
- * - 日期倒序，只处理没有有效 aiStory.story 的记录
- * - 默认最多成功补充 5 条，硬上限也是 5 条
+ * AI_BACKFILL_CONFIG 未配置：
+ *   保持原有 AI_API_KEY / AI_BASE_URL / AI_MODEL 逻辑
+ *
+ * AI_BACKFILL_CONFIG 已配置：
+ *   解析 JSON 并通过 MODEL_CONFIG 选择模型配置
+ *   MODEL_CONFIG 为空时使用 JSON.default
+ *   useExisting=true 时复用原有 AI 环境变量
+ *
+ * - 日期倒序
+ * - 默认成功补充 5 条，硬上限 30
  * - 每成功一条立即写回月度 JSON
- * - 只读取本地 preview 或 item.preview，绝不下载 UHD
+ * - 本地 Preview 优先，不下载 UHD
  */
 
 const fs = require('fs')
@@ -17,8 +24,9 @@ const path = require('path')
 
 const ROOT = process.cwd()
 const DATA_ROOT = path.join(ROOT, 'data')
+
 const DEFAULT_MAX_ITEMS = 5
-const MAX_ITEMS_LIMIT = 10
+const MAX_ITEMS_LIMIT = 30
 const MAX_CONSECUTIVE_FAILURES = 5
 const MAX_IMAGE_BYTES = 2 * 1024 * 1024
 
@@ -28,53 +36,232 @@ function log(message) {
 
 function parseBoolean(value, fallback = false) {
   if (value == null || value === '') return fallback
-  return ['1', 'true', 'yes', 'on'].includes(String(value).trim().toLowerCase())
+  return ['1', 'true', 'yes', 'on'].includes(
+    String(value).trim().toLowerCase()
+  )
 }
 
 function validateDate(value, name) {
   if (!value) return ''
+
   const text = String(value).trim()
+
   if (!/^\d{4}-\d{2}-\d{2}$/.test(text)) {
     throw new Error(`${name} 必须使用 YYYY-MM-DD 格式`)
   }
+
   const parsed = new Date(`${text}T00:00:00.000Z`)
-  if (Number.isNaN(parsed.getTime()) || parsed.toISOString().slice(0, 10) !== text) {
+
+  if (
+    Number.isNaN(parsed.getTime()) ||
+    parsed.toISOString().slice(0, 10) !== text
+  ) {
     throw new Error(`${name} 不是有效日期：${text}`)
   }
+
   return text
 }
 
+/**
+ * 解析模型配置。
+ *
+ * 返回：
+ * {
+ *   configured: boolean,
+ *   name: string,
+ *   model: object | null
+ * }
+ */
+function resolveAIConfig() {
+  const rawConfig = String(process.env.AI_BACKFILL_CONFIG || '').trim()
+  const requestedName = String(process.env.MODEL_CONFIG || '').trim()
+
+  // JSON Secret 为空：保持原有逻辑。
+  if (!rawConfig) {
+    if (requestedName) {
+      log('AI_BACKFILL_CONFIG 未配置，忽略模型选择名称，使用原有 AI 配置。')
+    }
+
+    return {
+      configured: false,
+      name: 'legacy',
+      model: null
+    }
+  }
+
+  let config
+
+  try {
+    config = JSON.parse(rawConfig)
+  } catch (error) {
+    throw new Error(`AI_BACKFILL_CONFIG JSON 解析失败：${error.message}`)
+  }
+
+  if (!config || typeof config !== 'object' || Array.isArray(config)) {
+    throw new Error('AI_BACKFILL_CONFIG 必须是 JSON 对象')
+  }
+
+  if (!Array.isArray(config.models) || config.models.length === 0) {
+    throw new Error('AI_BACKFILL_CONFIG.models 必须是非空数组')
+  }
+
+  const names = new Set()
+
+  for (const item of config.models) {
+    if (!item || typeof item !== 'object' || Array.isArray(item)) {
+      throw new Error('models 中的每个配置必须是对象')
+    }
+
+    const name = String(item.name || '').trim()
+
+    if (!name) {
+      throw new Error('模型配置缺少 name')
+    }
+
+    if (names.has(name)) {
+      throw new Error(`模型配置名称重复：${name}`)
+    }
+
+    names.add(name)
+
+    if (item.useExisting === true) {
+      continue
+    }
+
+    if (typeof item.baseUrl !== 'string' || !item.baseUrl.trim()) {
+      throw new Error(`模型 ${name} 缺少 baseUrl`)
+    }
+
+    if (typeof item.apiKey !== 'string' || !item.apiKey.trim()) {
+      throw new Error(`模型 ${name} 缺少 apiKey`)
+    }
+
+    if (typeof item.model !== 'string' || !item.model.trim()) {
+      throw new Error(`模型 ${name} 缺少 model`)
+    }
+
+    let parsedUrl
+
+    try {
+      parsedUrl = new URL(item.baseUrl)
+    } catch {
+      throw new Error(`模型 ${name} 的 baseUrl 无效`)
+    }
+
+    if (!['http:', 'https:'].includes(parsedUrl.protocol)) {
+      throw new Error(`模型 ${name} 的 baseUrl 只允许 HTTP/HTTPS`)
+    }
+  }
+
+  const defaultName = String(config.default || '').trim()
+
+  if (!defaultName) {
+    throw new Error('AI_BACKFILL_CONFIG 缺少 default')
+  }
+
+  if (!names.has(defaultName)) {
+    throw new Error(`默认模型配置不存在：${defaultName}`)
+  }
+
+  const selectedName = requestedName || defaultName
+
+  const selected = config.models.find(
+    item => String(item.name).trim() === selectedName
+  )
+
+  if (!selected) {
+    throw new Error(`找不到指定的模型配置：${selectedName}`)
+  }
+
+  return {
+    configured: true,
+    name: selectedName,
+    model: selected
+  }
+}
+
+/**
+ * 应用所选配置到 AI_* 环境变量。
+ *
+ * generateWallpaperStory() 每次调用时读取这些环境变量，
+ * 因此不需要修改 ai-story.js。
+ */
+function applyAIConfig(resolved) {
+  if (!resolved.configured) {
+    // 保持原有环境变量，不修改。
+    if (!process.env.AI_API_KEY) {
+      throw new Error(
+        '缺少 AI_API_KEY；请配置原有 Secret 或 AI_BACKFILL_CONFIG'
+      )
+    }
+
+    return
+  }
+
+  const modelConfig = resolved.model
+
+  if (modelConfig.useExisting === true) {
+    if (!process.env.AI_API_KEY) {
+      throw new Error(
+        `模型配置 ${resolved.name} 使用原有 AI 配置，但 AI_API_KEY 缺失`
+      )
+    }
+
+    log(`使用原有 AI 配置：${resolved.name}`)
+    return
+  }
+
+  process.env.AI_API_KEY = modelConfig.apiKey
+  process.env.AI_BASE_URL = modelConfig.baseUrl
+  process.env.AI_MODEL = modelConfig.model
+
+  log(`已应用模型配置：${resolved.name}`)
+  log(`AI_BASE_URL：${modelConfig.baseUrl}`)
+  log(`AI_MODEL：${modelConfig.model}`)
+}
+
 function getConfig() {
-  const startDate = validateDate(process.env.START_DATE || '', 'START_DATE')
-  const endDate = validateDate(process.env.END_DATE || '', 'END_DATE')
+  const startDate = validateDate(
+    process.env.START_DATE || '',
+    'START_DATE'
+  )
+
+  const endDate = validateDate(
+    process.env.END_DATE || '',
+    'END_DATE'
+  )
+
   if (startDate && endDate && startDate > endDate) {
     throw new Error('START_DATE 不能晚于 END_DATE')
   }
 
-  // 留空时默认 10；即使手动传入更大的数字，也硬限制为 10。
-  const rawMaxItems = process.env.MAX_ITEMS == null || process.env.MAX_ITEMS === ''
-    ? String(DEFAULT_MAX_ITEMS)
-    : String(process.env.MAX_ITEMS).trim()
+  const rawMaxItems =
+    process.env.MAX_ITEMS == null || process.env.MAX_ITEMS === ''
+      ? String(DEFAULT_MAX_ITEMS)
+      : String(process.env.MAX_ITEMS).trim()
 
   if (!/^\d+$/.test(rawMaxItems)) {
-    throw new Error('MAX_ITEMS 必须是 1 到 10 之间的整数')
+    throw new Error(
+      `MAX_ITEMS 必须是 1 到 ${MAX_ITEMS_LIMIT} 之间的整数`
+    )
   }
 
   const requestedMaxItems = Number(rawMaxItems)
-  if (requestedMaxItems < 1) {
-    throw new Error('MAX_ITEMS 必须是 1 到 10 之间的整数')
-  }
 
-  const apiKey = String(process.env.AI_API_KEY || '').trim()
-  if (!apiKey) {
-    throw new Error('缺少 AI_API_KEY；请复用每日 update-bing workflow 使用的 Secret')
+  if (
+    requestedMaxItems < 1 ||
+    requestedMaxItems > MAX_ITEMS_LIMIT
+  ) {
+    throw new Error(
+      `MAX_ITEMS 必须是 1 到 ${MAX_ITEMS_LIMIT} 之间的整数`
+    )
   }
 
   return {
     startDate,
     endDate,
     force: parseBoolean(process.env.FORCE, false),
-    maxItems: Math.min(requestedMaxItems, MAX_ITEMS_LIMIT),
+    maxItems: requestedMaxItems,
     previewRoot: path.resolve(process.env.PREVIEW_ROOT || 'preview')
   }
 }
@@ -85,6 +272,7 @@ function listMonthFiles() {
   }
 
   const result = []
+
   const years = fs.readdirSync(DATA_ROOT, { withFileTypes: true })
     .filter(entry => entry.isDirectory() && /^\d{4}$/.test(entry.name))
     .map(entry => entry.name)
@@ -92,6 +280,7 @@ function listMonthFiles() {
 
   for (const year of years) {
     const yearDir = path.join(DATA_ROOT, year)
+
     const months = fs.readdirSync(yearDir, { withFileTypes: true })
       .filter(entry => entry.isFile() && /^\d{2}\.json$/.test(entry.name))
       .map(entry => entry.name)
@@ -111,10 +300,13 @@ function readRecords(config) {
 
   for (const file of files) {
     let monthData
+
     try {
       monthData = JSON.parse(fs.readFileSync(file, 'utf8'))
     } catch (error) {
-      throw new Error(`月度 JSON 解析失败，已停止以避免漏处理数据：${path.relative(ROOT, file)}；${error.message}`)
+      throw new Error(
+        `月度 JSON 解析失败，已停止：${path.relative(ROOT, file)}；${error.message}`
+      )
     }
 
     if (!monthData || !Array.isArray(monthData.items)) {
@@ -124,16 +316,26 @@ function readRecords(config) {
 
     for (const item of monthData.items) {
       const date = typeof item?.date === 'string' ? item.date : ''
+
       if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) continue
       if (config.startDate && date < config.startDate) continue
       if (config.endDate && date > config.endDate) continue
-      records.push({ file, monthData, item, date })
+
+      records.push({
+        file,
+        monthData,
+        item,
+        date
+      })
     }
   }
 
-  // 日期倒序：先补最新的缺失记录。
   records.sort((a, b) => b.date.localeCompare(a.date))
-  return { records, fileCount: files.length }
+
+  return {
+    records,
+    fileCount: files.length
+  }
 }
 
 function hasExistingStory(item) {
@@ -149,22 +351,33 @@ function hasExistingStory(item) {
 function getLocalPreviewPath(config, date) {
   const year = date.slice(0, 4)
   const month = date.slice(5, 7)
-  return path.join(config.previewRoot, year, month, `${date}.jpg`)
+
+  return path.join(
+    config.previewRoot,
+    year,
+    month,
+    `${date}.jpg`
+  )
 }
 
 async function validateImageBuffer(buffer, source) {
   if (!Buffer.isBuffer(buffer) || buffer.length < 10 * 1024) {
     throw new Error(`图片内容为空或过小：${source}`)
   }
+
   if (buffer.length > MAX_IMAGE_BYTES) {
-    throw new Error(`图片超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 限制：${source}`)
+    throw new Error(
+      `图片超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 限制：${source}`
+    )
   }
 
   const Jimp = require('jimp')
   const image = await Jimp.read(buffer)
+
   if (!image.bitmap.width || !image.bitmap.height) {
     throw new Error(`无法识别图片尺寸：${source}`)
   }
+
   return buffer
 }
 
@@ -172,11 +385,13 @@ async function downloadImage(url) {
   if (!url) throw new Error('图片 URL 为空')
 
   let parsed
+
   try {
     parsed = new URL(url)
   } catch {
     throw new Error(`图片 URL 无效：${url}`)
   }
+
   if (parsed.protocol !== 'https:') {
     throw new Error(`只允许通过 HTTPS 下载图片：${url}`)
   }
@@ -195,44 +410,63 @@ async function downloadImage(url) {
     throw new Error(`下载图片失败，HTTP ${response.status}：${url}`)
   }
 
-  const contentLength = Number(response.headers.get('content-length') || 0)
+  const contentLength = Number(
+    response.headers.get('content-length') || 0
+  )
+
   if (contentLength > MAX_IMAGE_BYTES) {
-    throw new Error(`图片超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 限制：${url}`)
+    throw new Error(
+      `图片超过 ${MAX_IMAGE_BYTES / 1024 / 1024}MB 限制：${url}`
+    )
   }
 
   const buffer = Buffer.from(await response.arrayBuffer())
+
   return validateImageBuffer(buffer, url)
 }
 
 async function loadWallpaperImage(config, item, date) {
-  // 优先读取仓库中的 preview 文件。
   const localPath = getLocalPreviewPath(config, date)
+
   if (fs.existsSync(localPath)) {
     try {
       const buffer = fs.readFileSync(localPath)
       await validateImageBuffer(buffer, localPath)
+
       log(`使用本地预览图：${path.relative(ROOT, localPath)}`)
       return buffer
     } catch (error) {
-      log(`本地预览图不可用，尝试 JSON 中的 preview 地址：${error.message}`)
+      log(`本地预览图不可用，尝试 JSON preview：${error.message}`)
     }
   }
 
-  // 严格只使用 item.preview，绝不回退到 sourceImage / image（可能是 UHD）。
+  // 只使用 item.preview，绝不回退到 UHD。
   if (!item.preview) {
-    throw new Error(`记录 ${date} 没有 preview 地址，且本地预览图不存在：${path.relative(ROOT, localPath)}`)
+    throw new Error(
+      `记录 ${date} 没有 preview 地址，且本地预览图不存在：${path.relative(ROOT, localPath)}`
+    )
   }
 
   log(`下载预览图：${date} <- ${item.preview}`)
+
   return downloadImage(item.preview)
 }
 
 function writeMonthData(file, monthData) {
-  monthData.items.sort((a, b) => String(a?.date || '').localeCompare(String(b?.date || '')))
+  monthData.items.sort(
+    (a, b) => String(a?.date || '').localeCompare(String(b?.date || ''))
+  )
+
   monthData.updatedAt = new Date().toISOString()
 
   const tempFile = `${file}.tmp`
-  fs.writeFileSync(tempFile, `${JSON.stringify(monthData, null, 2)}\n`, 'utf8')
+
+  fs.writeFileSync(
+    tempFile,
+    `${JSON.stringify(monthData, null, 2)}\n`,
+    'utf8'
+  )
+
   fs.renameSync(tempFile, file)
 }
 
@@ -241,21 +475,22 @@ function sleep(ms) {
 }
 
 async function main() {
+  const resolvedAI = resolveAIConfig()
+  applyAIConfig(resolvedAI)
+
   const config = getConfig()
 
-  // 不在这里覆盖 AI_* 环境变量。它们由 workflow 直接从每日更新任务的
-  // 同一组 Secrets / Variables 注入，ai-story.js 会原样读取。
   const { generateWallpaperStory } = require('./ai-story')
   const { records, fileCount } = readRecords(config)
 
   log('========== 历史 AI 解读补充开始 ==========')
+  log(`AI 配置：${resolvedAI.name}`)
   log(`扫描月度 JSON：${fileCount} 个`)
   log(`日期范围：${config.startDate || '最早'} 至 ${config.endDate || '最新'}`)
-  log('处理顺序：日期倒序')
   log(`强制重新生成：${config.force ? '是' : '否'}`)
   log(`最多成功补充：${config.maxItems} 条（硬上限 ${MAX_ITEMS_LIMIT}）`)
-  log(`AI_BASE_URL：${process.env.AI_BASE_URL || '使用 ai-story.js 默认值'}`)
-  log(`AI_MODEL：${process.env.AI_MODEL || '使用 ai-story.js 默认值'}`)
+  log(`AI_BASE_URL：${process.env.AI_BASE_URL || 'ai-story.js 默认值'}`)
+  log(`AI_MODEL：${process.env.AI_MODEL || 'ai-story.js 默认值'}`)
   log(`候选记录：${records.length} 条`)
 
   let successCount = 0
@@ -264,6 +499,7 @@ async function main() {
   let attemptedCount = 0
   let processedCount = 0
   let consecutiveFailures = 0
+
   const maxAttempts = config.maxItems * 3
 
   for (const record of records) {
@@ -282,10 +518,12 @@ async function main() {
 
     attemptedCount += 1
     processedCount += 1
+
     const { item, date, file, monthData } = record
 
     try {
       log(`开始补充：${date}`)
+
       const imageBuffer = await loadWallpaperImage(config, item, date)
 
       const aiStory = await generateWallpaperStory({
@@ -298,23 +536,34 @@ async function main() {
         }
       })
 
-      if (!aiStory || typeof aiStory.story !== 'string' || !aiStory.story.trim()) {
+      if (
+        !aiStory ||
+        typeof aiStory.story !== 'string' ||
+        !aiStory.story.trim()
+      ) {
         throw new Error('AI 返回的故事内容为空，拒绝写入')
       }
 
       item.aiStory = aiStory
+
       writeMonthData(file, monthData)
 
       successCount += 1
       consecutiveFailures = 0
-      log(`补充成功：${date}；标题：${aiStory.title}；模型：${aiStory.model}`)
+
+      log(
+        `补充成功：${date}；标题：${aiStory.title}；模型：${aiStory.model}`
+      )
     } catch (error) {
       failedCount += 1
       consecutiveFailures += 1
+
       log(`补充失败：${date}；原因：${error.message}`)
 
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
-        log(`连续失败达到 ${MAX_CONSECUTIVE_FAILURES} 次，疑似接口级问题，停止任务。`)
+        log(
+          `连续失败达到 ${MAX_CONSECUTIVE_FAILURES} 次，疑似接口级问题，停止任务。`
+        )
         break
       }
     }
@@ -346,5 +595,6 @@ module.exports = {
   validateDate,
   getLocalPreviewPath,
   readRecords,
-  writeMonthData
+  writeMonthData,
+  resolveAIConfig
 }
