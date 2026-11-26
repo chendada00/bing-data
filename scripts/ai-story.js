@@ -278,6 +278,37 @@ async function requestCompletion(client, request) {
   }
 }
 
+function formatAIError(error) {
+  const status = error?.status || error?.response?.status
+  const code = error?.code
+  const message = error?.message || '未知错误'
+
+  let detail = ''
+
+  const body = error?.error || error?.response?.data
+
+  if (typeof body === 'string') {
+    detail = body
+  } else if (body && typeof body === 'object') {
+    detail = body.message || body.error || body.detail || ''
+  }
+
+  if (status) {
+    return [
+      `HTTP：${status}`,
+      `错误：${message}`,
+      detail && detail !== message ? `详情：${String(detail).slice(0, 500)}` : '',
+      code ? `错误代码：${code}` : ''
+    ].filter(Boolean).join('\n')
+  }
+
+  return [
+    code ? `错误代码：${code}` : '',
+    `错误：${message}`,
+    detail && detail !== message ? `详情：${String(detail).slice(0, 500)}` : ''
+  ].filter(Boolean).join('\n')
+}
+
 async function generateWallpaperStory({ imageBuffer, date, bing }) {
   const apiKey = process.env.AI_API_KEY
   const baseURL = (process.env.AI_BASE_URL || 'https://api.chatanywhere.org/v1').replace(/\/+$/, '')
@@ -307,7 +338,7 @@ async function generateWallpaperStory({ imageBuffer, date, bing }) {
         }
       ],
       temperature: attempt === 0 ? 0.6 : 0.25,
-      max_tokens: 1600,
+      max_tokens: 4096,
       response_format: { type: 'json_object' }
     }
 
@@ -315,68 +346,22 @@ async function generateWallpaperStory({ imageBuffer, date, bing }) {
     const choice = completion?.choices?.[0]
     const content = extractMessageText(choice?.message)
 
-    // 仅当正文为空时，记录经过脱敏的响应结构。
-    // 不输出正文、API Key、图片 Base64 或完整请求。
-    if (!content) {
-      const message = choice?.message
-      const responseDiagnostic = {
-        responseType: typeof completion,
-        responseKeys:
-          completion && typeof completion === 'object'
-            ? Object.keys(completion)
-            : [],
-        model: completion?.model || null,
-        choicesType: Array.isArray(completion?.choices)
-          ? 'array'
-          : typeof completion?.choices,
-        choicesLength: Array.isArray(completion?.choices)
-          ? completion.choices.length
-          : null,
-        choiceKeys:
-          choice && typeof choice === 'object'
-            ? Object.keys(choice)
-            : [],
-        finishReason: choice?.finish_reason ?? null,
-        messageType: typeof message,
-        messageKeys:
-          message && typeof message === 'object'
-            ? Object.keys(message)
-            : [],
-        contentType: typeof message?.content,
-        contentIsArray: Array.isArray(message?.content),
-        contentLength:
-          typeof message?.content === 'string'
-            ? message.content.length
-            : Array.isArray(message?.content)
-              ? message.content.length
-              : null,
-        contentPartTypes: Array.isArray(message?.content)
-          ? message.content.map(part => ({
-              type: part?.type || typeof part,
-              hasText: typeof part?.text === 'string',
-              textLength:
-                typeof part?.text === 'string'
-                  ? part.text.length
-                  : null
-            }))
-          : [],
-        refusal: message?.refusal
-          ? String(message.refusal).slice(0, 200)
-          : null,
-        usage: completion?.usage || null
-      }
 
-      console.error(
-        '[AI响应诊断]',
-        JSON.stringify(responseDiagnostic, null, 2)
-      )
-    }
 
     try {
       if (!content) {
         const finishReason = choice?.finish_reason || 'unknown'
         const refusal = choice?.message?.refusal
-        throw new Error(`模型返回空正文（finish_reason=${finishReason}${refusal ? `，refusal=${String(refusal).slice(0, 120)}` : ''}）`)
+
+        if (finishReason === 'length') {
+          throw new Error('模型未生成正文：输出 token 已耗尽（length）')
+        }
+
+        if (refusal) {
+          throw new Error(`模型拒绝生成：${String(refusal).slice(0, 200)}`)
+        }
+
+        throw new Error(`模型返回空正文（停止原因：${finishReason}）`)
       }
       const parsed = extractJsonObject(content)
       const story = validateStory(parsed)
